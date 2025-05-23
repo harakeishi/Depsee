@@ -7,6 +7,7 @@ import (
 
 	"github.com/harakeishi/depsee/internal/analyzer"
 	"github.com/harakeishi/depsee/internal/graph"
+	"github.com/harakeishi/depsee/internal/output"
 )
 
 const version = "v0.1.0"
@@ -81,4 +82,9 @@ func main() {
 	for id, s := range stability.NodeStabilities {
 		fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 安定度=%.2f\n", id, s.OutDegree, s.InDegree, s.Instability)
 	}
+
+	// Mermaid記法の相関図出力
+	mermaid := output.GenerateMermaid(g, stability)
+	fmt.Println("[info] Mermaid相関図:")
+	fmt.Println(mermaid)
 }
