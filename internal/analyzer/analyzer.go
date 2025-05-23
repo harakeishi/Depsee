@@ -236,3 +236,12 @@ func findFuncDeclByName(f *ast.File, name string) *ast.BlockStmt {
 	}
 	return nil
 }
+
+// withLocalImportsフラグ付きのAnalyzeDir（今後拡張用のダミー実装）
+func AnalyzeDirWithOption(dir string, withLocalImports bool) (*AnalysisResult, error) {
+	if !withLocalImports {
+		return AnalyzeDir(dir)
+	}
+	// TODO: ローカルimport再帰解析の実装
+	return AnalyzeDir(dir) // 現状は従来通り
+}

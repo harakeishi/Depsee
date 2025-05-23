@@ -14,7 +14,8 @@ const version = "v0.1.0"
 
 func main() {
 	var (
-		showVersion = flag.Bool("version", false, "バージョン情報を表示")
+		showVersion      = flag.Bool("version", false, "バージョン情報を表示")
+		withLocalImports = flag.Bool("with-local-imports", false, "同一リポジトリ内のimport先パッケージも再帰的に解析")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `depsee: Goコード依存可視化ツール\n\n`)
@@ -41,7 +42,7 @@ func main() {
 
 	fmt.Printf("[info] 解析対象ディレクトリ: %s\n", targetDir)
 
-	result, err := analyzer.AnalyzeDir(targetDir)
+	result, err := analyzer.AnalyzeDirWithOption(targetDir, *withLocalImports)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[error] 解析失敗: %v\n", err)
 		os.Exit(1)
