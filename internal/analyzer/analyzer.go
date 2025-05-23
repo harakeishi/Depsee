@@ -168,7 +168,17 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Analysis
 			}
 		} else {
 			// 通常の関数
+			// --- 関数本体の呼び出し関数名抽出 ---
+			fi.BodyCalls = extractBodyCalls(funcDecl.Body)
 			result.Functions = append(result.Functions, fi)
+		}
+	}
+	// 構造体メソッドにもBodyCallsを追加
+	for _, s := range structMap {
+		for i, m := range s.Methods {
+			if m.Position.IsValid() {
+				s.Methods[i].BodyCalls = extractBodyCalls(findFuncDeclByName(f, m.Name))
+			}
 		}
 	}
 }
@@ -191,4 +201,38 @@ func exprToTypeString(expr ast.Expr) string {
 	default:
 		return "unknown"
 	}
+}
+
+// 関数本体から呼び出している関数名リストを抽出
+func extractBodyCalls(body *ast.BlockStmt) []string {
+	calls := []string{}
+	if body == nil {
+		return calls
+	}
+	ast.Inspect(body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		switch fun := call.Fun.(type) {
+		case *ast.Ident:
+			calls = append(calls, fun.Name)
+		case *ast.SelectorExpr:
+			calls = append(calls, fun.Sel.Name)
+		}
+		return true
+	})
+	return calls
+}
+
+// 名前からFuncDeclを探す（同一ファイル内のみ）
+func findFuncDeclByName(f *ast.File, name string) *ast.BlockStmt {
+	for _, decl := range f.Decls {
+		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
+			if funcDecl.Name.Name == name {
+				return funcDecl.Body
+			}
+		}
+	}
+	return nil
 }

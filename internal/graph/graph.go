@@ -165,5 +165,29 @@ func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 
 	// 3. インターフェース実装依存なども今後拡張
 
+	// 4. 関数・メソッド本体依存
+	// 関数
+	for _, f := range result.Functions {
+		fromID := NodeID(f.Package + "." + f.Name)
+		for _, called := range f.BodyCalls {
+			toID := NodeID(f.Package + "." + called)
+			if _, ok := g.Nodes[toID]; ok {
+				g.AddEdge(fromID, toID)
+			}
+		}
+	}
+	// メソッド
+	for _, s := range result.Structs {
+		for _, m := range s.Methods {
+			fromID := NodeID(s.Package + "." + m.Name)
+			for _, called := range m.BodyCalls {
+				toID := NodeID(s.Package + "." + called)
+				if _, ok := g.Nodes[toID]; ok {
+					g.AddEdge(fromID, toID)
+				}
+			}
+		}
+	}
+
 	return g
 }

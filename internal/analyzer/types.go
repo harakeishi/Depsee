@@ -26,11 +26,12 @@ type InterfaceInfo struct {
 }
 
 type FuncInfo struct {
-	Name     string
-	Receiver string // メソッドの場合、レシーバ型名
-	Package  string
-	File     string
-	Position token.Position
-	Params   []FieldInfo // 引数情報
-	Results  []FieldInfo // 戻り値情報
+	Name      string
+	Receiver  string // メソッドの場合、レシーバ型名
+	Package   string
+	File      string
+	Position  token.Position
+	Params    []FieldInfo // 引数情報
+	Results   []FieldInfo // 戻り値情報
+	BodyCalls []string    // 本体で呼び出している関数名リスト
 }
