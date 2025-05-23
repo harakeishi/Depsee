@@ -74,4 +74,11 @@ func main() {
 			fmt.Printf("  %s --> %s\n", from, to)
 		}
 	}
+
+	// 安定度算出・出力
+	stability := graph.CalculateStability(g)
+	fmt.Println("[info] ノード安定度:")
+	for id, s := range stability.NodeStabilities {
+		fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 安定度=%.2f\n", id, s.OutDegree, s.InDegree, s.Instability)
+	}
 }
