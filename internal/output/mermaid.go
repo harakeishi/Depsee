@@ -38,6 +38,7 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 	type nodeWithStability struct {
 		ID          graph.NodeID
 		Name        string
+		Kind        graph.NodeKind
 		Instability float64
 	}
 	var nodes []nodeWithStability
@@ -47,7 +48,7 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 			inst = s.Instability
 		}
 		nodes = append(nodes, nodeWithStability{
-			ID: id, Name: n.Name, Instability: inst,
+			ID: id, Name: n.Name, Kind: n.Kind, Instability: inst,
 		})
 	}
 	// 安定度降順でソート
@@ -56,10 +57,38 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 	})
 
 	out := "graph TD\n"
+	// スタイル定義
+	out += "    %% スタイル定義\n"
+	out += "    classDef default fill:#fff,stroke:#333,stroke-width:2px\n"
+
+	// パッケージごとにノードをグループ化
+	packageNodes := make(map[string][]nodeWithStability)
 	for _, n := range nodes {
-		safeID := mermaidSafeID(n.ID)
-		out += fmt.Sprintf("    %s[\"%s<br>安定度:%.2f\"]\n", safeID, n.Name, n.Instability)
+		pkg := strings.Split(string(n.ID), ".")[0]
+		packageNodes[pkg] = append(packageNodes[pkg], n)
 	}
+
+	// パッケージごとにsubgraphを作成
+	for pkg, pkgNodes := range packageNodes {
+		out += fmt.Sprintf("    subgraph %s\n", pkg)
+		for _, n := range pkgNodes {
+			safeID := mermaidSafeID(n.ID)
+			var shape string
+			switch n.Kind {
+			case graph.NodeStruct:
+				shape = "[\"%s<br>構造体<br>安定度:%.2f\"]"
+			case graph.NodeInterface:
+				shape = "{{\"%s<br>インターフェース<br>安定度:%.2f\"}}"
+			case graph.NodeFunc:
+				shape = "(\"%s<br>関数<br>安定度:%.2f\")"
+			}
+			out += fmt.Sprintf("        %s%s\n", safeID, fmt.Sprintf(shape, n.Name, n.Instability))
+			out += fmt.Sprintf("        class %s default\n", safeID)
+		}
+		out += "    end\n"
+	}
+
+	// エッジの定義（subgraphの外に配置）
 	for from, tos := range g.Edges {
 		safeFrom := mermaidSafeID(from)
 		for to := range tos {
