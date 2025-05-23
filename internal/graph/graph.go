@@ -170,7 +170,12 @@ func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 	for _, f := range result.Functions {
 		fromID := NodeID(f.Package + "." + f.Name)
 		for _, called := range f.BodyCalls {
-			toID := NodeID(f.Package + "." + called)
+			var toID NodeID
+			if strings.Contains(called, ".") {
+				toID = NodeID(called)
+			} else {
+				toID = NodeID(f.Package + "." + called)
+			}
 			if _, ok := g.Nodes[toID]; ok {
 				g.AddEdge(fromID, toID)
 			}
@@ -181,7 +186,12 @@ func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 		for _, m := range s.Methods {
 			fromID := NodeID(s.Package + "." + m.Name)
 			for _, called := range m.BodyCalls {
-				toID := NodeID(s.Package + "." + called)
+				var toID NodeID
+				if strings.Contains(called, ".") {
+					toID = NodeID(called)
+				} else {
+					toID = NodeID(s.Package + "." + called)
+				}
 				if _, ok := g.Nodes[toID]; ok {
 					g.AddEdge(fromID, toID)
 				}

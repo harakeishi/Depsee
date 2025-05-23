@@ -3,9 +3,36 @@ package output
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/harakeishi/depsee/internal/graph"
 )
+
+// mermaidSafeID はMermaidの予約語を含むIDを安全な形式に変換します
+func mermaidSafeID(id graph.NodeID) string {
+	// 予約語のリスト
+	reservedWords := []string{"graph", "subgraph", "end", "flowchart", "TD", "BT", "RL", "LR"}
+
+	// IDをパッケージ名と識別子に分割
+	parts := strings.Split(string(id), ".")
+	if len(parts) != 2 {
+		return string(id)
+	}
+
+	pkgName, ident := parts[0], parts[1]
+
+	// 予約語を含む場合は接頭辞を追加
+	for _, word := range reservedWords {
+		if strings.EqualFold(pkgName, word) {
+			pkgName = "pkg_" + pkgName
+		}
+		if strings.EqualFold(ident, word) {
+			ident = "id_" + ident
+		}
+	}
+
+	return pkgName + "." + ident
+}
 
 func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult) string {
 	type nodeWithStability struct {
@@ -30,11 +57,14 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 
 	out := "graph TD\n"
 	for _, n := range nodes {
-		out += fmt.Sprintf("    %s[\"%s<br>安定度:%.2f\"]\n", n.ID, n.Name, n.Instability)
+		safeID := mermaidSafeID(n.ID)
+		out += fmt.Sprintf("    %s[\"%s<br>安定度:%.2f\"]\n", safeID, n.Name, n.Instability)
 	}
 	for from, tos := range g.Edges {
+		safeFrom := mermaidSafeID(from)
 		for to := range tos {
-			out += fmt.Sprintf("    %s --> %s\n", from, to)
+			safeTo := mermaidSafeID(to)
+			out += fmt.Sprintf("    %s --> %s\n", safeFrom, safeTo)
 		}
 	}
 	return out

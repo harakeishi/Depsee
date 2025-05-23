@@ -54,6 +54,22 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Analysis
 	pkgName := f.Name.Name
 	structMap := map[string]*StructInfo{}
 
+	// パッケージのエイリアスマップを作成
+	aliasMap := make(map[string]string)
+	importMap := make(map[string]string)
+	for _, imp := range f.Imports {
+		path := strings.Trim(imp.Path.Value, "\"")
+		if imp.Name != nil {
+			// エイリアスがある場合
+			aliasMap[imp.Name.Name] = path
+		} else {
+			// エイリアスがない場合は、パッケージ名を抽出
+			parts := strings.Split(path, "/")
+			pkg := parts[len(parts)-1]
+			importMap[pkg] = path
+		}
+	}
+
 	// 1st pass: type宣言（構造体・インターフェース）
 	for _, decl := range f.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
@@ -169,7 +185,7 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Analysis
 		} else {
 			// 通常の関数
 			// --- 関数本体の呼び出し関数名抽出 ---
-			fi.BodyCalls = extractBodyCalls(funcDecl.Body)
+			fi.BodyCalls = extractBodyCallsWithAlias(funcDecl.Body, aliasMap, importMap)
 			result.Functions = append(result.Functions, fi)
 		}
 	}
@@ -177,7 +193,7 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Analysis
 	for _, s := range structMap {
 		for i, m := range s.Methods {
 			if m.Position.IsValid() {
-				s.Methods[i].BodyCalls = extractBodyCalls(findFuncDeclByName(f, m.Name))
+				s.Methods[i].BodyCalls = extractBodyCallsWithAlias(findFuncDeclByName(f, m.Name), aliasMap, importMap)
 			}
 		}
 	}
@@ -203,8 +219,8 @@ func exprToTypeString(expr ast.Expr) string {
 	}
 }
 
-// 関数本体から呼び出している関数名リストを抽出
-func extractBodyCalls(body *ast.BlockStmt) []string {
+// 関数本体から呼び出している関数名リストを抽出（エイリアス対応版）
+func extractBodyCallsWithAlias(body *ast.BlockStmt, aliasMap, importMap map[string]string) []string {
 	calls := []string{}
 	if body == nil {
 		return calls
@@ -216,9 +232,27 @@ func extractBodyCalls(body *ast.BlockStmt) []string {
 		}
 		switch fun := call.Fun.(type) {
 		case *ast.Ident:
+			// ローカル関数呼び出し
 			calls = append(calls, fun.Name)
 		case *ast.SelectorExpr:
-			calls = append(calls, fun.Sel.Name)
+			// パッケージ名を含む関数呼び出し
+			if pkg, ok := fun.X.(*ast.Ident); ok {
+				// エイリアスを解決
+				if alias, ok := aliasMap[pkg.Name]; ok {
+					// エイリアスが存在する場合は、パッケージパスを使用
+					parts := strings.Split(alias, "/")
+					pkgName := parts[len(parts)-1]
+					calls = append(calls, pkgName+"."+fun.Sel.Name)
+				} else if imp, ok := importMap[pkg.Name]; ok {
+					// インポートマップに存在する場合
+					parts := strings.Split(imp, "/")
+					pkgName := parts[len(parts)-1]
+					calls = append(calls, pkgName+"."+fun.Sel.Name)
+				} else {
+					// エイリアスもインポートマップにもない場合は、そのまま使用
+					calls = append(calls, pkg.Name+"."+fun.Sel.Name)
+				}
+			}
 		}
 		return true
 	})
@@ -237,11 +271,62 @@ func findFuncDeclByName(f *ast.File, name string) *ast.BlockStmt {
 	return nil
 }
 
-// withLocalImportsフラグ付きのAnalyzeDir（今後拡張用のダミー実装）
+// AnalyzeDirWithOption は指定ディレクトリ配下のGoファイルを再帰的に探索し、
+// withLocalImportsがtrueの場合は同一リポジトリ内のimport先パッケージも再帰的に解析する
 func AnalyzeDirWithOption(dir string, withLocalImports bool) (*AnalysisResult, error) {
-	if !withLocalImports {
-		return AnalyzeDir(dir)
+	result := &AnalysisResult{}
+	processedDirs := make(map[string]bool)
+
+	var analyzeDirRecursive func(dir string) error
+	analyzeDirRecursive = func(dir string) error {
+		if processedDirs[dir] {
+			return nil
+		}
+		processedDirs[dir] = true
+
+		// 現在のディレクトリを解析
+		currentResult, err := AnalyzeDir(dir)
+		if err != nil {
+			return err
+		}
+
+		// 結果をマージ
+		result.Structs = append(result.Structs, currentResult.Structs...)
+		result.Interfaces = append(result.Interfaces, currentResult.Interfaces...)
+		result.Functions = append(result.Functions, currentResult.Functions...)
+
+		if !withLocalImports {
+			return nil
+		}
+
+		// ローカルインポートの解析
+		fset := token.NewFileSet()
+		pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
+		if err != nil {
+			return err
+		}
+
+		for _, pkg := range pkgs {
+			for _, file := range pkg.Files {
+				for _, imp := range file.Imports {
+					impPath := strings.Trim(imp.Path.Value, "\"")
+					// ローカルインポートの場合のみ処理
+					if strings.HasPrefix(impPath, "./") || strings.HasPrefix(impPath, "../") {
+						absPath := filepath.Join(dir, impPath)
+						if err := analyzeDirRecursive(absPath); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+
+		return nil
 	}
-	// TODO: ローカルimport再帰解析の実装
-	return AnalyzeDir(dir) // 現状は従来通り
+
+	if err := analyzeDirRecursive(dir); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
