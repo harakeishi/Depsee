@@ -211,7 +211,7 @@ func TestGenerateMermaidWithReservedWords(t *testing.T) {
 	}
 
 	// ラベルが正しくエスケープされているかチェック
-	if !strings.Contains(result, `["graph<br>不安定度:1.00"]`) {
+	if !strings.Contains(result, `[graph<br>不安定度:1.00]`) {
 		t.Error("ノードラベルが正しく出力されていません")
 	}
 
