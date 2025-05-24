@@ -1,7 +1,7 @@
 # depsee
 
 [![CI](https://github.com/harakeishi/Depsee/actions/workflows/ci.yml/badge.svg)](https://github.com/harakeishi/Depsee/actions/workflows/ci.yml)
-[![Release](https://github.com/harakeishi/Depsee/actions/workflows/auto-release-simple.yml/badge.svg)](https://github.com/harakeishi/Depsee/actions/workflows/auto-release-simple.yml)
+[![Auto Release](https://github.com/harakeishi/Depsee/actions/workflows/auto-release.yml/badge.svg)](https://github.com/harakeishi/Depsee/actions/workflows/auto-release.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/harakeishi/depsee)](https://goreportcard.com/report/github.com/harakeishi/depsee)
 [![codecov](https://codecov.io/gh/harakeishi/Depsee/branch/main/graph/badge.svg)](https://codecov.io/gh/harakeishi/Depsee)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/harakeishi/Depsee)](https://github.com/harakeishi/Depsee/releases/latest)
