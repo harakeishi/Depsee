@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "v0.0.3"
+var version = "v0.0.4"
 
 var (
 	// グローバルフラグ
