@@ -75,20 +75,6 @@ release:
     - `ghcr.io/harakeishi/depsee:{{ .Tag }}`
     - `ghcr.io/harakeishi/depsee:latest`
 
-brews:
-  - name: depsee
-    repository:
-      owner: harakeishi
-      name: homebrew-tap
-    directory: Formula
-    homepage: https://github.com/harakeishi/Depsee
-    description: "A dependency analysis tool"
-    license: "MIT"
-    test: |
-      system "#{bin}/depsee version"
-    install: |
-      bin.install "depsee"
-
 dockers:
   - image_templates:
       - "ghcr.io/harakeishi/depsee:{{ .Tag }}"

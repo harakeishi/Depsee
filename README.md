@@ -29,16 +29,6 @@ Goコードの構造体・関数・インターフェースの依存関係を可
 go install github.com/harakeishi/depsee@latest
 ```
 
-### Homebrew
-
-```bash
-# タップを追加
-brew tap harakeishi/tap
-
-# インストール
-brew install depsee
-```
-
 ### Docker
 
 ```bash
@@ -310,7 +300,6 @@ go run cmd/depsee/main.go analyze ./testdata/sample
 - `ghcr.io/harakeishi/depsee:v{version}`
 
 **パッケージマネージャー**:
-- **Homebrew**: `brew install harakeishi/tap/depsee`
 - **Go**: `go install github.com/harakeishi/depsee@latest`
 
 **その他**:
