@@ -98,6 +98,67 @@ func AnalyzeDir(dir string) (*AnalysisResult, error) {
 	return analyzer.AnalyzeDir(dir)
 }
 
+// AnalyzeDirWithPackageFilter は指定されたパッケージのみを解析対象とする
+func (ga *GoAnalyzer) AnalyzeDirWithPackageFilter(dir string, targetPackages []string) (*AnalysisResult, error) {
+	logger.Debug("パッケージフィルタ付きディレクトリ解析開始", "dir", dir, "target_packages", targetPackages)
+
+	// 全体解析を実行
+	result, err := ga.AnalyzeDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	// パッケージフィルタリングが指定されていない場合は全結果を返す
+	if len(targetPackages) == 0 {
+		return result, nil
+	}
+
+	// 対象パッケージのセットを作成
+	targetSet := make(map[string]bool)
+	for _, pkg := range targetPackages {
+		targetSet[pkg] = true
+	}
+
+	// フィルタリング実行
+	filteredResult := &AnalysisResult{}
+
+	// 構造体のフィルタリング
+	for _, s := range result.Structs {
+		if targetSet[s.Package] {
+			filteredResult.Structs = append(filteredResult.Structs, s)
+		}
+	}
+
+	// インターフェースのフィルタリング
+	for _, i := range result.Interfaces {
+		if targetSet[i.Package] {
+			filteredResult.Interfaces = append(filteredResult.Interfaces, i)
+		}
+	}
+
+	// 関数のフィルタリング
+	for _, f := range result.Functions {
+		if targetSet[f.Package] {
+			filteredResult.Functions = append(filteredResult.Functions, f)
+		}
+	}
+
+	// パッケージのフィルタリング
+	for _, p := range result.Packages {
+		if targetSet[p.Name] {
+			filteredResult.Packages = append(filteredResult.Packages, p)
+		}
+	}
+
+	logger.Info("パッケージフィルタリング完了",
+		"original_structs", len(result.Structs), "filtered_structs", len(filteredResult.Structs),
+		"original_interfaces", len(result.Interfaces), "filtered_interfaces", len(filteredResult.Interfaces),
+		"original_functions", len(result.Functions), "filtered_functions", len(filteredResult.Functions),
+		"original_packages", len(result.Packages), "filtered_packages", len(filteredResult.Packages))
+
+	return filteredResult, nil
+}
+
 // analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
 func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *AnalysisResult) {
 	pkgName := f.Name.Name

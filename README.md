@@ -7,6 +7,7 @@ Goコードの構造体・関数・インターフェースの依存関係を可
 - 🔍 **静的解析**: Goコードを解析して構造体・関数・インターフェースを抽出
 - 📊 **依存関係可視化**: 要素間の依存関係をグラフ構造で表現
 - 📦 **パッケージ間依存関係**: 同リポジトリ内のパッケージ間依存関係を解析（オプション）
+- 🎯 **パッケージフィルタリング**: 指定されたパッケージのみを解析対象とする機能
 - 📈 **不安定度計算**: SOLID原則に基づく不安定度指標の算出
 - 🎨 **Mermaid出力**: 相関図をMermaid記法で生成
 - 🛠️ **高品質設計**: SOLIDの原則に準拠した拡張可能なアーキテクチャ
@@ -28,6 +29,12 @@ depsee analyze ./path/to/your/project
 # パッケージ間依存関係を含む解析
 depsee --include-package-deps analyze ./path/to/your/project
 
+# 特定のパッケージのみを解析
+depsee analyze --target-packages main ./path/to/your/project
+
+# 複数のパッケージを解析
+depsee analyze --target-packages main,cmd,pkg ./path/to/your/project
+
 # バージョン表示
 depsee -version
 
@@ -38,6 +45,26 @@ depsee -log-level debug analyze ./path/to/project
 depsee -log-format json analyze ./path/to/project
 ```
 
+### パッケージフィルタリング
+
+`--target-packages` オプションを使用すると、指定されたパッケージのみを解析対象とできます：
+
+```bash
+# mainパッケージのみを解析
+depsee analyze --target-packages main ./your-project
+
+# mainとcmdパッケージのみを解析
+depsee analyze --target-packages main,cmd ./your-project
+
+# 複数パッケージの解析（スペースを含む場合はクォートで囲む）
+depsee analyze --target-packages "main, cmd, internal/service" ./your-project
+```
+
+この機能により、以下のメリットがあります：
+- **大規模プロジェクトでの効率的な解析**: 関心のあるパッケージのみに焦点を当てることができます
+- **段階的な解析**: パッケージごとに依存関係を段階的に確認できます
+- **パフォーマンス向上**: 解析対象を絞ることで処理時間を短縮できます
+
 ### パッケージ間依存関係解析
 
 `--include-package-deps` オプションを使用すると、同リポジトリ内のパッケージ間の依存関係も解析できます：
@@ -45,6 +72,9 @@ depsee -log-format json analyze ./path/to/project
 ```bash
 # パッケージ間依存関係を含む解析
 depsee --include-package-deps analyze ./multi-package-project
+
+# パッケージフィルタリングと組み合わせて使用
+depsee analyze --target-packages main,cmd --include-package-deps ./multi-package-project
 ```
 
 この機能により、以下が追加で解析されます：
