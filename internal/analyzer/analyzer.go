@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/harakeishi/depsee/internal/errors"
 	"github.com/harakeishi/depsee/internal/logger"
 )
 
@@ -22,11 +23,14 @@ func AnalyzeDir(dir string) (*AnalysisResult, error) {
 	logger.Debug("ディレクトリ解析開始", "dir", dir)
 
 	var files []string
+	errorCollector := errors.NewErrorCollector()
+
 	// ディレクトリ再帰探索
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			logger.Warn("ファイル読み込みエラー", "path", path, "error", err)
-			return err
+			errorCollector.Add(errors.NewAnalysisError(path, err))
+			return nil // エラーを収集して処理を続行
 		}
 		if d.IsDir() {
 			return nil
@@ -39,7 +43,7 @@ func AnalyzeDir(dir string) (*AnalysisResult, error) {
 	})
 	if err != nil {
 		logger.Error("ディレクトリ探索失敗", "dir", dir, "error", err)
-		return nil, err
+		return nil, errors.NewAnalysisError(dir, err)
 	}
 
 	logger.Info("Goファイル発見完了", "count", len(files))
@@ -50,9 +54,17 @@ func AnalyzeDir(dir string) (*AnalysisResult, error) {
 	for _, file := range files {
 		f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
 		if err != nil {
-			return nil, err
+			logger.Warn("ファイルパース失敗", "file", file, "error", err)
+			errorCollector.Add(errors.NewAnalysisError(file, err))
+			continue // パースエラーがあっても他のファイルは処理を続行
 		}
 		analyzeFile(f, fset, file, result)
+	}
+
+	// 重大なエラーがある場合は失敗とする
+	if errorCollector.HasErrors() {
+		logger.Warn("解析中にエラーが発生しました", "error_count", len(errorCollector.Errors()))
+		// 部分的な結果でも返す（警告として扱う）
 	}
 
 	return result, nil
