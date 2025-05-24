@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/harakeishi/depsee/internal/logger"
 )
 
 type AnalysisResult struct {
@@ -17,10 +19,13 @@ type AnalysisResult struct {
 
 // AnalyzeDir は指定ディレクトリ配下のGoファイルを再帰的に探索し、構造体・インターフェース・関数を抽出する
 func AnalyzeDir(dir string) (*AnalysisResult, error) {
+	logger.Debug("ディレクトリ解析開始", "dir", dir)
+
 	var files []string
 	// ディレクトリ再帰探索
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			logger.Warn("ファイル読み込みエラー", "path", path, "error", err)
 			return err
 		}
 		if d.IsDir() {
@@ -28,12 +33,16 @@ func AnalyzeDir(dir string) (*AnalysisResult, error) {
 		}
 		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
 			files = append(files, path)
+			logger.Debug("Goファイル発見", "file", path)
 		}
 		return nil
 	})
 	if err != nil {
+		logger.Error("ディレクトリ探索失敗", "dir", dir, "error", err)
 		return nil, err
 	}
+
+	logger.Info("Goファイル発見完了", "count", len(files))
 
 	fset := token.NewFileSet()
 	result := &AnalysisResult{}

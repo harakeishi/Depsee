@@ -2,9 +2,9 @@ package graph
 
 type NodeStability struct {
 	NodeID      NodeID
-	OutDegree   int     // 依存数
-	InDegree    int     // 非依存数
-	Instability float64 // 安定度（変更容易度）
+	OutDegree   int     // Ce: 出次数（このノードが依存している数）
+	InDegree    int     // Ca: 入次数（このノードに依存している数）
+	Instability float64 // I = Ce / (Ca + Ce): 不安定度（0=安定、1=不安定）
 }
 
 type StabilityResult struct {
@@ -26,18 +26,18 @@ func CalculateStability(g *DependencyGraph) *StabilityResult {
 
 	result := &StabilityResult{NodeStabilities: make(map[NodeID]*NodeStability)}
 	for id := range g.Nodes {
-		out := outDegree[id]
-		in_ := inDegree[id]
+		ce := outDegree[id] // Ce: 出次数（このノードが依存している数）
+		ca := inDegree[id]  // Ca: 入次数（このノードに依存している数）
 		var instability float64
-		if out+in_ == 0 {
-			instability = 1.0
+		if ce+ca == 0 {
+			instability = 1.0 // 孤立ノードは不安定とする
 		} else {
-			instability = float64(in_) / float64(out+in_)
+			instability = float64(ce) / float64(ce+ca) // I = Ce / (Ca + Ce)
 		}
 		result.NodeStabilities[id] = &NodeStability{
 			NodeID:      id,
-			OutDegree:   out,
-			InDegree:    in_,
+			OutDegree:   ce,
+			InDegree:    ca,
 			Instability: instability,
 		}
 	}

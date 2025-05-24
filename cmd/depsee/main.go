@@ -7,6 +7,7 @@ import (
 
 	"github.com/harakeishi/depsee/internal/analyzer"
 	"github.com/harakeishi/depsee/internal/graph"
+	"github.com/harakeishi/depsee/internal/logger"
 	"github.com/harakeishi/depsee/internal/output"
 )
 
@@ -15,6 +16,8 @@ const version = "v0.1.0"
 func main() {
 	var (
 		showVersion = flag.Bool("version", false, "バージョン情報を表示")
+		logLevel    = flag.String("log-level", "info", "ログレベル (debug, info, warn, error)")
+		logFormat   = flag.String("log-format", "text", "ログフォーマット (text, json)")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `depsee: Goコード依存可視化ツール\n\n`)
@@ -22,6 +25,13 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	// ログ設定の初期化
+	logger.Init(logger.Config{
+		Level:  logger.LogLevel(*logLevel),
+		Format: *logFormat,
+		Output: os.Stderr,
+	})
 
 	if *showVersion {
 		fmt.Println("depsee", version)
@@ -39,11 +49,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("[info] 解析対象ディレクトリ: %s\n", targetDir)
+	logger.Info("解析開始", "target_dir", targetDir)
 
 	result, err := analyzer.AnalyzeDir(targetDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[error] 解析失敗: %v\n", err)
+		logger.Error("解析失敗", "error", err, "target_dir", targetDir)
 		os.Exit(1)
 	}
 
