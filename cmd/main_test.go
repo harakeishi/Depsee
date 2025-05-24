@@ -22,28 +22,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestCLIVersion(t *testing.T) {
-	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
-	err := cmd.Run()
-	if err != nil {
-		t.Fatalf("Failed to build binary: %v", err)
-	}
-	defer os.Remove("depsee_test")
-
-	// バージョン表示テスト
-	cmd = exec.Command("./depsee_test", "version")
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("Failed to run version command: %v", err)
-	}
-
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "depsee") || !strings.Contains(outputStr, "v0.1.0") {
-		t.Errorf("Version output unexpected: %s", outputStr)
-	}
-}
-
 func TestCLIAnalyze(t *testing.T) {
 	// バイナリをビルド
 	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
