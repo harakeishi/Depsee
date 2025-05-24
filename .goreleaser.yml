@@ -1,3 +1,5 @@
+version: 2
+
 project_name: depsee
 
 before:
@@ -45,7 +47,7 @@ checksum:
   name_template: 'checksums.txt'
 
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -78,7 +80,7 @@ brews:
     repository:
       owner: harakeishi
       name: homebrew-tap
-    folder: Formula
+    directory: Formula
     homepage: https://github.com/harakeishi/Depsee
     description: "A dependency analysis tool"
     license: "MIT"
