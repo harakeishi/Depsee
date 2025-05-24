@@ -6,7 +6,12 @@ import "github.com/harakeishi/depsee/internal/analyzer"
 type Builder struct{}
 
 // NewBuilder は新しいBuilderインスタンスを作成
-func NewBuilder() *Builder {
+func NewBuilder() GraphBuilder {
+	return &Builder{}
+}
+
+// NewGraphBuilder は新しいGraphBuilderインスタンスを作成
+func NewGraphBuilder() GraphBuilder {
 	return &Builder{}
 }
 

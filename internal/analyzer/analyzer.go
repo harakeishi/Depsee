@@ -18,9 +18,30 @@ type AnalysisResult struct {
 	Functions  []FuncInfo
 }
 
+// GoAnalyzer はGo言語の静的解析を行う具象実装
+type GoAnalyzer struct {
+	// 将来的に設定やオプションを追加可能
+}
+
+// New は新しいAnalyzerを作成
+func New() Analyzer {
+	return &GoAnalyzer{}
+}
+
+// NewGoAnalyzer は新しいGoAnalyzerを作成
+func NewGoAnalyzer() Analyzer {
+	return &GoAnalyzer{}
+}
+
 // AnalyzeDir は指定ディレクトリ配下のGoファイルを再帰的に探索し、構造体・インターフェース・関数を抽出する
-func AnalyzeDir(dir string) (*AnalysisResult, error) {
+func (ga *GoAnalyzer) AnalyzeDir(dir string) (*AnalysisResult, error) {
 	logger.Debug("ディレクトリ解析開始", "dir", dir)
+
+	// ディレクトリの存在確認
+	if _, err := os.Stat(dir); err != nil {
+		logger.Error("ディレクトリが存在しません", "dir", dir, "error", err)
+		return nil, errors.NewAnalysisError(dir, err)
+	}
 
 	var files []string
 	errorCollector := errors.NewErrorCollector()
@@ -68,6 +89,12 @@ func AnalyzeDir(dir string) (*AnalysisResult, error) {
 	}
 
 	return result, nil
+}
+
+// 後方互換性のためのラッパー関数
+func AnalyzeDir(dir string) (*AnalysisResult, error) {
+	analyzer := NewGoAnalyzer()
+	return analyzer.AnalyzeDir(dir)
 }
 
 // analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出

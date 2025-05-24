@@ -6,7 +6,12 @@ import "github.com/harakeishi/depsee/internal/graph"
 type Generator struct{}
 
 // NewGenerator は新しいGeneratorインスタンスを作成
-func NewGenerator() *Generator {
+func NewGenerator() OutputGenerator {
+	return &Generator{}
+}
+
+// NewOutputGenerator は新しいOutputGeneratorインスタンスを作成
+func NewOutputGenerator() OutputGenerator {
 	return &Generator{}
 }
 

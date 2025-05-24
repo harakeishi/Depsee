@@ -23,17 +23,38 @@ type Config struct {
 
 // CLI はCLIアプリケーションを表す
 type CLI struct {
-	analyzer  *analyzer.Analyzer
-	grapher   *graph.Builder
-	outputter *output.Generator
+	analyzer  analyzer.Analyzer
+	grapher   graph.GraphBuilder
+	outputter output.OutputGenerator
+	logger    logger.Logger
 }
 
-// NewCLI は新しいCLIインスタンスを作成
+// NewCLI は新しいCLIインスタンスを作成（デフォルト依存関係）
 func NewCLI() *CLI {
+	return NewCLIWithDependencies(
+		analyzer.New(),
+		graph.NewBuilder(),
+		output.NewGenerator(),
+		logger.NewLogger(logger.Config{
+			Level:  logger.LevelInfo,
+			Format: "text",
+			Output: os.Stderr,
+		}),
+	)
+}
+
+// NewCLIWithDependencies は依存関係を注入してCLIインスタンスを作成
+func NewCLIWithDependencies(
+	analyzer analyzer.Analyzer,
+	grapher graph.GraphBuilder,
+	outputter output.OutputGenerator,
+	logger logger.Logger,
+) *CLI {
 	return &CLI{
-		analyzer:  analyzer.New(),
-		grapher:   graph.NewBuilder(),
-		outputter: output.NewGenerator(),
+		analyzer:  analyzer,
+		grapher:   grapher,
+		outputter: outputter,
+		logger:    logger,
 	}
 }
 
@@ -101,12 +122,12 @@ Usage: depsee analyze <target_dir>
 
 // execute は実際の処理を実行
 func (c *CLI) execute(config *Config) error {
-	logger.Info("解析開始", "target_dir", config.TargetDir)
+	c.logger.Info("解析開始", "target_dir", config.TargetDir)
 
 	// 解析実行
 	result, err := c.analyzer.AnalyzeDir(config.TargetDir)
 	if err != nil {
-		logger.Error("解析失敗", "error", err, "target_dir", config.TargetDir)
+		c.logger.Error("解析失敗", "error", err, "target_dir", config.TargetDir)
 		return err
 	}
 

@@ -2,30 +2,50 @@ package analyzer
 
 import "go/token"
 
-// TypeInfo は基本的な型情報のインターフェース
-type TypeInfo interface {
+// Analyzer はコード解析を行うインターフェース
+type Analyzer interface {
+	AnalyzeDir(dir string) (*AnalysisResult, error)
+}
+
+// Named は名前を持つ要素のインターフェース
+type Named interface {
 	GetName() string
-	GetPackage() string
-	GetFile() string
+}
+
+// Positioned は位置情報を持つ要素のインターフェース
+type Positioned interface {
 	GetPosition() token.Position
 }
 
-// StructType は構造体専用のインターフェース
+// Packaged はパッケージ情報を持つ要素のインターフェース
+type Packaged interface {
+	GetPackage() string
+	GetFile() string
+}
+
+// CodeElement は基本的なコード要素のインターフェース
+type CodeElement interface {
+	Named
+	Positioned
+	Packaged
+}
+
+// StructType は構造体型のインターフェース
 type StructType interface {
-	TypeInfo
+	CodeElement
 	GetFields() []FieldInfo
 	GetMethods() []FuncInfo
 }
 
-// InterfaceType はインターフェース専用のインターフェース
+// InterfaceType はインターフェース型のインターフェース
 type InterfaceType interface {
-	TypeInfo
+	CodeElement
 	GetMethods() []FuncInfo
 }
 
-// FuncType は関数専用のインターフェース
+// FuncType は関数型のインターフェース
 type FuncType interface {
-	TypeInfo
+	CodeElement
 	GetReceiver() string
 	GetParams() []FieldInfo
 	GetResults() []FieldInfo
