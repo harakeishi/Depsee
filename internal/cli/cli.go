@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -9,18 +8,10 @@ import (
 	"github.com/harakeishi/depsee/internal/graph"
 	"github.com/harakeishi/depsee/internal/logger"
 	"github.com/harakeishi/depsee/internal/output"
+	"github.com/spf13/cobra"
 )
 
 const version = "v0.1.0"
-
-// Config はCLIの設定を表す
-type Config struct {
-	ShowVersion        bool
-	LogLevel           string
-	LogFormat          string
-	TargetDir          string
-	IncludePackageDeps bool
-}
 
 // CLI はCLIアプリケーションを表す
 type CLI struct {
@@ -28,6 +19,7 @@ type CLI struct {
 	grapher   graph.GraphBuilder
 	outputter output.OutputGenerator
 	logger    logger.Logger
+	rootCmd   *cobra.Command
 }
 
 // NewCLI は新しいCLIインスタンスを作成（デフォルト依存関係）
@@ -51,86 +43,94 @@ func NewCLIWithDependencies(
 	outputter output.OutputGenerator,
 	logger logger.Logger,
 ) *CLI {
-	return &CLI{
+	cli := &CLI{
 		analyzer:  analyzer,
 		grapher:   grapher,
 		outputter: outputter,
 		logger:    logger,
 	}
+
+	cli.setupCommands()
+	return cli
+}
+
+// setupCommands はCobraコマンドを設定
+func (c *CLI) setupCommands() {
+	c.rootCmd = &cobra.Command{
+		Use:   "depsee",
+		Short: "Goコード依存可視化ツール",
+		Long:  "Goコードの依存関係を解析し、可視化するツールです。",
+	}
+
+	// グローバルフラグ
+	c.rootCmd.PersistentFlags().String("log-level", "info", "ログレベル (debug, info, warn, error)")
+	c.rootCmd.PersistentFlags().String("log-format", "text", "ログフォーマット (text, json)")
+
+	// versionコマンド
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "バージョン情報を表示",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("depsee %s\n", version)
+		},
+	}
+
+	// analyzeコマンド
+	analyzeCmd := &cobra.Command{
+		Use:   "analyze [target_dir]",
+		Short: "指定されたディレクトリのGoコードを解析",
+		Long:  "指定されたディレクトリのGoコードを解析し、依存関係を可視化します。",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.runAnalyze,
+	}
+
+	// analyzeコマンド専用フラグ
+	analyzeCmd.Flags().Bool("include-package-deps", false, "同リポジトリ内のパッケージ間依存関係を解析")
+
+	c.rootCmd.AddCommand(versionCmd)
+	c.rootCmd.AddCommand(analyzeCmd)
 }
 
 // Run はCLIアプリケーションを実行
 func (c *CLI) Run(args []string) error {
-	config, err := c.parseFlags(args)
-	if err != nil {
-		return err
-	}
+	c.rootCmd.SetArgs(args)
+	return c.rootCmd.Execute()
+}
+
+// runAnalyze はanalyzeコマンドの実行
+func (c *CLI) runAnalyze(cmd *cobra.Command, args []string) error {
+	// グローバルフラグの取得
+	logLevel, _ := cmd.Root().PersistentFlags().GetString("log-level")
+	logFormat, _ := cmd.Root().PersistentFlags().GetString("log-format")
+
+	// ローカルフラグの取得
+	includePackageDeps, _ := cmd.Flags().GetBool("include-package-deps")
+
+	targetDir := args[0]
 
 	// ログ設定の初期化
 	logger.Init(logger.Config{
-		Level:  logger.LogLevel(config.LogLevel),
-		Format: config.LogFormat,
+		Level:  logger.LogLevel(logLevel),
+		Format: logFormat,
 		Output: os.Stderr,
 	})
 
-	if config.ShowVersion {
-		fmt.Println("depsee", version)
-		return nil
+	// ディレクトリの存在確認
+	if _, err := os.Stat(targetDir); err != nil {
+		return fmt.Errorf("ディレクトリが存在しません: %s", targetDir)
 	}
 
-	return c.execute(config)
-}
-
-// parseFlags はコマンドライン引数を解析
-func (c *CLI) parseFlags(args []string) (*Config, error) {
-	fs := flag.NewFlagSet("depsee", flag.ContinueOnError)
-
-	config := &Config{}
-	fs.BoolVar(&config.ShowVersion, "version", false, "バージョン情報を表示")
-	fs.StringVar(&config.LogLevel, "log-level", "info", "ログレベル (debug, info, warn, error)")
-	fs.StringVar(&config.LogFormat, "log-format", "text", "ログフォーマット (text, json)")
-	fs.BoolVar(&config.IncludePackageDeps, "include-package-deps", false, "同リポジトリ内のパッケージ間依存関係を解析")
-
-	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, `depsee: Goコード依存可視化ツール
-
-Usage: depsee [options] analyze <target_dir>
-
-Options:
-`)
-		fs.PrintDefaults()
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return nil, err
-	}
-
-	if config.ShowVersion {
-		return config, nil
-	}
-
-	parsedArgs := fs.Args()
-	if len(parsedArgs) < 2 || parsedArgs[0] != "analyze" {
-		fs.Usage()
-		return nil, fmt.Errorf("invalid arguments")
-	}
-
-	config.TargetDir = parsedArgs[1]
-	if _, err := os.Stat(config.TargetDir); err != nil {
-		return nil, fmt.Errorf("ディレクトリが存在しません: %s", config.TargetDir)
-	}
-
-	return config, nil
+	return c.execute(targetDir, includePackageDeps)
 }
 
 // execute は実際の処理を実行
-func (c *CLI) execute(config *Config) error {
-	c.logger.Info("解析開始", "target_dir", config.TargetDir)
+func (c *CLI) execute(targetDir string, includePackageDeps bool) error {
+	c.logger.Info("解析開始", "target_dir", targetDir)
 
 	// 解析実行
-	result, err := c.analyzer.AnalyzeDir(config.TargetDir)
+	result, err := c.analyzer.AnalyzeDir(targetDir)
 	if err != nil {
-		c.logger.Error("解析失敗", "error", err, "target_dir", config.TargetDir)
+		c.logger.Error("解析失敗", "error", err, "target_dir", targetDir)
 		return err
 	}
 
@@ -139,11 +139,11 @@ func (c *CLI) execute(config *Config) error {
 
 	// 依存グラフ構築
 	var dependencyGraph *graph.DependencyGraph
-	if config.IncludePackageDeps {
-		c.logger.Info("パッケージ間依存関係を含む依存グラフ構築", "include_package_deps", config.IncludePackageDeps)
-		dependencyGraph = c.grapher.BuildDependencyGraphWithPackages(result, config.TargetDir)
+	if includePackageDeps {
+		c.logger.Info("パッケージ間依存関係を含む依存グラフ構築", "include_package_deps", includePackageDeps)
+		dependencyGraph = c.grapher.BuildDependencyGraphWithPackages(result, targetDir)
 	} else {
-		c.logger.Info("通常の依存グラフ構築", "include_package_deps", config.IncludePackageDeps)
+		c.logger.Info("通常の依存グラフ構築", "include_package_deps", includePackageDeps)
 		dependencyGraph = c.grapher.BuildDependencyGraph(result)
 	}
 	c.displayGraph(dependencyGraph)
