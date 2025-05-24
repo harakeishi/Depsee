@@ -1,6 +1,9 @@
 package analyzer
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"testing"
@@ -206,5 +209,205 @@ func TestMethodAnalysis(t *testing.T) {
 		if !methodNames[expected] {
 			t.Errorf("期待されるメソッドが見つかりません: %s", expected)
 		}
+	}
+}
+
+func TestExtractBodyCalls(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected []string
+	}{
+		{
+			name: "同一パッケージ内の関数呼び出し",
+			code: `
+package test
+func TestFunc() {
+	New()
+	CreateUser()
+}`,
+			expected: []string{"New", "CreateUser"},
+		},
+		{
+			name: "パッケージ修飾子付きの関数呼び出し",
+			code: `
+package test
+import "fmt"
+func TestFunc() {
+	fmt.Println("test")
+	depsee.New()
+}`,
+			expected: []string{"fmt.Println", "depsee.New"},
+		},
+		{
+			name: "構造体リテラル（パッケージ修飾子付き）",
+			code: `
+package test
+func TestFunc() {
+	config := depsee.Config{Name: "test"}
+	_ = config
+}`,
+			expected: []string{"depsee.Config"},
+		},
+		{
+			name: "構造体リテラル（同一パッケージ）",
+			code: `
+package test
+func TestFunc() {
+	user := User{Name: "test"}
+	_ = user
+}`,
+			expected: []string{"User"},
+		},
+		{
+			name: "メソッド呼び出し",
+			code: `
+package test
+func TestFunc() {
+	obj.Method()
+	user.UpdateProfile()
+}`,
+			expected: []string{"obj.Method", "user.UpdateProfile"},
+		},
+		{
+			name: "複合的なケース",
+			code: `
+package test
+import "fmt"
+func TestFunc() {
+	fmt.Println("start")
+	user := User{Name: "test"}
+	config := depsee.Config{}
+	depsee.New(config)
+	user.UpdateProfile()
+}`,
+			expected: []string{"fmt.Println", "User", "depsee.Config", "depsee.New", "user.UpdateProfile"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// テストコードをパース
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "test.go", tt.code, parser.ParseComments)
+			if err != nil {
+				t.Fatalf("コードのパースに失敗: %v", err)
+			}
+
+			// 関数を見つけてBodyCallsを抽出
+			var funcBody *ast.BlockStmt
+			for _, decl := range f.Decls {
+				if funcDecl, ok := decl.(*ast.FuncDecl); ok && funcDecl.Name.Name == "TestFunc" {
+					funcBody = funcDecl.Body
+					break
+				}
+			}
+
+			if funcBody == nil {
+				t.Fatal("TestFunc関数が見つかりません")
+			}
+
+			// extractBodyCallsを実行
+			calls := extractBodyCalls(funcBody)
+
+			// 結果を検証
+			if len(calls) != len(tt.expected) {
+				t.Errorf("呼び出し数が期待値と異なります。期待: %d, 実際: %d\n期待: %v\n実際: %v",
+					len(tt.expected), len(calls), tt.expected, calls)
+				return
+			}
+
+			// 順序は保証されないので、セットとして比較
+			callSet := make(map[string]bool)
+			for _, call := range calls {
+				callSet[call] = true
+			}
+
+			for _, expected := range tt.expected {
+				if !callSet[expected] {
+					t.Errorf("期待される呼び出しが見つかりません: %s\n実際の呼び出し: %v", expected, calls)
+				}
+			}
+		})
+	}
+}
+
+func TestImportAliasExtraction(t *testing.T) {
+	tests := []struct {
+		name          string
+		code          string
+		expectedPath  string
+		expectedAlias string
+	}{
+		{
+			name: "エイリアス指定あり",
+			code: `
+package test
+import f "fmt"
+`,
+			expectedPath:  "fmt",
+			expectedAlias: "f",
+		},
+		{
+			name: "エイリアス指定なし",
+			code: `
+package test
+import "fmt"
+`,
+			expectedPath:  "fmt",
+			expectedAlias: "fmt",
+		},
+		{
+			name: "パッケージパスからの自動抽出",
+			code: `
+package test
+import "github.com/user/repo/pkg/service"
+`,
+			expectedPath:  "github.com/user/repo/pkg/service",
+			expectedAlias: "service",
+		},
+		{
+			name: "ドット記法",
+			code: `
+package test
+import . "fmt"
+`,
+			expectedPath:  "fmt",
+			expectedAlias: ".",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// テストコードをパース
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "test.go", tt.code, parser.ParseComments)
+			if err != nil {
+				t.Fatalf("コードのパースに失敗: %v", err)
+			}
+
+			// analyzeFileを実行
+			result := &AnalysisResult{}
+			analyzeFile(f, fset, "test.go", result)
+
+			// パッケージ情報を検証
+			if len(result.Packages) != 1 {
+				t.Fatalf("パッケージ数が期待値と異なります。期待: 1, 実際: %d", len(result.Packages))
+			}
+
+			pkg := result.Packages[0]
+			if len(pkg.Imports) != 1 {
+				t.Fatalf("import数が期待値と異なります。期待: 1, 実際: %d", len(pkg.Imports))
+			}
+
+			imp := pkg.Imports[0]
+			if imp.Path != tt.expectedPath {
+				t.Errorf("importパスが期待値と異なります。期待: %s, 実際: %s", tt.expectedPath, imp.Path)
+			}
+
+			if imp.Alias != tt.expectedAlias {
+				t.Errorf("importエイリアスが期待値と異なります。期待: %s, 実際: %s", tt.expectedAlias, imp.Alias)
+			}
+		})
 	}
 }

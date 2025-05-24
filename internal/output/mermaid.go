@@ -105,10 +105,15 @@ type nodeWithStability struct {
 
 func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult) string {
 
-	// パッケージごとにノードをグループ化
+	// パッケージごとにノードをグループ化（パッケージノードは除外）
 	packageNodes := make(map[string][]nodeWithStability)
 
 	for id, n := range g.Nodes {
+		// パッケージノードは除外
+		if n.Kind == graph.NodePackage {
+			continue
+		}
+
 		inst := 0.0
 		if s, ok := stability.NodeStabilities[id]; ok {
 			inst = s.Instability
@@ -152,40 +157,47 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 			continue
 		}
 
-		// パッケージノードかどうかをチェック
-		isPackageNode := len(nodes) == 1 && nodes[0].Kind == graph.NodePackage
+		// パッケージの不安定度を取得
+		packageInstability := 0.0
+		if pkgStability, ok := stability.PackageStabilities[pkg]; ok {
+			packageInstability = pkgStability.Instability
+		}
 
-		if !isPackageNode {
-			// 通常のパッケージ（構造体、関数、インターフェースを含む）
-			safePkgName := sanitizeNodeID(pkg)
-			out += fmt.Sprintf("    subgraph %s[\"%s\"]\n", safePkgName, escapeNodeLabel(pkg))
+		// サブグラフのタイトルにパッケージ名と不安定度を表示
+		safePkgName := sanitizeNodeID(pkg)
+		packageTitle := fmt.Sprintf("%s (不安定度:%.2f)", pkg, packageInstability)
+		out += fmt.Sprintf("    subgraph %s[\"%s\"]\n", safePkgName, escapeNodeLabel(packageTitle))
 
-			for _, n := range nodes {
-				idMapping[n.ID] = n.SafeID
-				escapedName := escapeNodeLabel(n.Name)
-				nodeShape := getNodeShape(n.Kind)
-				out += fmt.Sprintf("        %s%s\n", n.SafeID, nodeShape(escapedName, n.Instability))
-			}
-
-			out += "    end\n"
-		} else {
-			// パッケージノード（パッケージ間依存関係用）
-			n := nodes[0]
+		for _, n := range nodes {
 			idMapping[n.ID] = n.SafeID
 			escapedName := escapeNodeLabel(n.Name)
 			nodeShape := getNodeShape(n.Kind)
-			out += fmt.Sprintf("    %s%s\n", n.SafeID, nodeShape(escapedName, n.Instability))
+			out += fmt.Sprintf("        %s%s\n", n.SafeID, nodeShape(escapedName, n.Instability))
 		}
+
+		out += "    end\n"
 	}
 
-	// エッジ定義
+	// エッジ定義（パッケージノード間のエッジは除外）
 	for from, tos := range g.Edges {
+		// パッケージノードからのエッジは除外
+		fromNode := g.Nodes[from]
+		if fromNode == nil || fromNode.Kind == graph.NodePackage {
+			continue
+		}
+
 		safeFromID := idMapping[from]
 		if safeFromID == "" {
 			safeFromID = sanitizeNodeID(string(from))
 		}
 
 		for to := range tos {
+			// パッケージノードへのエッジは除外
+			toNode := g.Nodes[to]
+			if toNode == nil || toNode.Kind == graph.NodePackage {
+				continue
+			}
+
 			safeToID := idMapping[to]
 			if safeToID == "" {
 				safeToID = sanitizeNodeID(string(to))

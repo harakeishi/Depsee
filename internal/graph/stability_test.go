@@ -208,3 +208,282 @@ func TestNodeStabilityStruct(t *testing.T) {
 		t.Errorf("Instability: expected 0.6, got %.3f", stability.Instability)
 	}
 }
+
+func TestCalculatePackageStability(t *testing.T) {
+	g := NewDependencyGraph()
+
+	// 複数パッケージのテスト用ノードを作成
+	nodes := []*Node{
+		// pkg1のノード
+		{ID: "pkg1.A", Kind: NodeStruct, Name: "A", Package: "pkg1"},
+		{ID: "pkg1.B", Kind: NodeInterface, Name: "B", Package: "pkg1"},
+		// pkg2のノード
+		{ID: "pkg2.C", Kind: NodeStruct, Name: "C", Package: "pkg2"},
+		{ID: "pkg2.D", Kind: NodeFunc, Name: "D", Package: "pkg2"},
+		// pkg3のノード
+		{ID: "pkg3.E", Kind: NodeStruct, Name: "E", Package: "pkg3"},
+	}
+
+	for _, node := range nodes {
+		g.AddNode(node)
+	}
+
+	// パッケージ間依存関係を作成
+	// pkg1.A -> pkg2.C (pkg1 -> pkg2)
+	// pkg1.B -> pkg2.D (pkg1 -> pkg2)
+	// pkg2.C -> pkg3.E (pkg2 -> pkg3)
+	// pkg1内の依存関係: pkg1.A -> pkg1.B (パッケージ間依存には含まれない)
+	g.AddEdge("pkg1.A", "pkg2.C")
+	g.AddEdge("pkg1.B", "pkg2.D")
+	g.AddEdge("pkg2.C", "pkg3.E")
+	g.AddEdge("pkg1.A", "pkg1.B") // 同一パッケージ内
+
+	result := CalculateStability(g)
+
+	if result == nil {
+		t.Fatal("CalculateStability returned nil")
+	}
+
+	if len(result.PackageStabilities) != 3 {
+		t.Errorf("Expected 3 package stabilities, got %d", len(result.PackageStabilities))
+	}
+
+	// pkg1の安定度検証
+	// pkg1: Ce=1 (pkg1->pkg2), Ca=0, I=1.0 (最も不安定)
+	pkg1Stability := result.PackageStabilities["pkg1"]
+	if pkg1Stability == nil {
+		t.Fatal("Package pkg1 stability not found")
+	}
+
+	if pkg1Stability.OutDegree != 1 {
+		t.Errorf("Package pkg1 OutDegree: expected 1, got %d", pkg1Stability.OutDegree)
+	}
+
+	if pkg1Stability.InDegree != 0 {
+		t.Errorf("Package pkg1 InDegree: expected 0, got %d", pkg1Stability.InDegree)
+	}
+
+	if pkg1Stability.Instability != 1.0 {
+		t.Errorf("Package pkg1 Instability: expected 1.0, got %.3f", pkg1Stability.Instability)
+	}
+
+	// pkg2の安定度検証
+	// pkg2: Ce=1 (pkg2->pkg3), Ca=1 (pkg1->pkg2), I=0.5 (中間)
+	pkg2Stability := result.PackageStabilities["pkg2"]
+	if pkg2Stability == nil {
+		t.Fatal("Package pkg2 stability not found")
+	}
+
+	if pkg2Stability.OutDegree != 1 {
+		t.Errorf("Package pkg2 OutDegree: expected 1, got %d", pkg2Stability.OutDegree)
+	}
+
+	if pkg2Stability.InDegree != 1 {
+		t.Errorf("Package pkg2 InDegree: expected 1, got %d", pkg2Stability.InDegree)
+	}
+
+	if pkg2Stability.Instability != 0.5 {
+		t.Errorf("Package pkg2 Instability: expected 0.5, got %.3f", pkg2Stability.Instability)
+	}
+
+	// pkg3の安定度検証
+	// pkg3: Ce=0, Ca=1 (pkg2->pkg3), I=0.0 (最も安定)
+	pkg3Stability := result.PackageStabilities["pkg3"]
+	if pkg3Stability == nil {
+		t.Fatal("Package pkg3 stability not found")
+	}
+
+	if pkg3Stability.OutDegree != 0 {
+		t.Errorf("Package pkg3 OutDegree: expected 0, got %d", pkg3Stability.OutDegree)
+	}
+
+	if pkg3Stability.InDegree != 1 {
+		t.Errorf("Package pkg3 InDegree: expected 1, got %d", pkg3Stability.InDegree)
+	}
+
+	if pkg3Stability.Instability != 0.0 {
+		t.Errorf("Package pkg3 Instability: expected 0.0, got %.3f", pkg3Stability.Instability)
+	}
+}
+
+func TestCalculatePackageStabilityWithPackageNodes(t *testing.T) {
+	g := NewDependencyGraph()
+
+	// パッケージノードと通常のノードを混在させたテスト
+	nodes := []*Node{
+		// 通常のノード
+		{ID: "pkg1.A", Kind: NodeStruct, Name: "A", Package: "pkg1"},
+		{ID: "pkg2.B", Kind: NodeStruct, Name: "B", Package: "pkg2"},
+		// パッケージノード（除外されるべき）
+		{ID: "package:pkg1", Kind: NodePackage, Name: "pkg1", Package: "pkg1"},
+		{ID: "package:pkg2", Kind: NodePackage, Name: "pkg2", Package: "pkg2"},
+	}
+
+	for _, node := range nodes {
+		g.AddNode(node)
+	}
+
+	// 依存関係を追加（パッケージノード間の依存も含む）
+	g.AddEdge("pkg1.A", "pkg2.B")             // 通常のノード間
+	g.AddEdge("package:pkg1", "package:pkg2") // パッケージノード間（除外されるべき）
+
+	result := CalculateStability(g)
+
+	if result == nil {
+		t.Fatal("CalculateStability returned nil")
+	}
+
+	// パッケージノード間の依存関係は除外され、通常のノード間の依存関係のみが考慮される
+	if len(result.PackageStabilities) != 2 {
+		t.Errorf("Expected 2 package stabilities, got %d", len(result.PackageStabilities))
+	}
+
+	// pkg1の安定度検証（パッケージノードの依存関係は除外される）
+	pkg1Stability := result.PackageStabilities["pkg1"]
+	if pkg1Stability == nil {
+		t.Fatal("Package pkg1 stability not found")
+	}
+
+	if pkg1Stability.OutDegree != 1 {
+		t.Errorf("Package pkg1 OutDegree: expected 1, got %d", pkg1Stability.OutDegree)
+	}
+
+	if pkg1Stability.InDegree != 0 {
+		t.Errorf("Package pkg1 InDegree: expected 0, got %d", pkg1Stability.InDegree)
+	}
+
+	if pkg1Stability.Instability != 1.0 {
+		t.Errorf("Package pkg1 Instability: expected 1.0, got %.3f", pkg1Stability.Instability)
+	}
+}
+
+func TestCalculatePackageStabilityWithDirectPackageDependencies(t *testing.T) {
+	g := NewDependencyGraph()
+
+	// 通常のノードとパッケージノードを混在させたテスト
+	nodes := []*Node{
+		// 通常のノード
+		{ID: "pkg1.A", Kind: NodeStruct, Name: "A", Package: "pkg1"},
+		{ID: "pkg2.B", Kind: NodeStruct, Name: "B", Package: "pkg2"},
+		{ID: "pkg3.C", Kind: NodeStruct, Name: "C", Package: "pkg3"},
+		// パッケージノード
+		{ID: "package:pkg1", Kind: NodePackage, Name: "pkg1", Package: "pkg1"},
+		{ID: "package:pkg2", Kind: NodePackage, Name: "pkg2", Package: "pkg2"},
+		{ID: "package:pkg3", Kind: NodePackage, Name: "pkg3", Package: "pkg3"},
+	}
+
+	for _, node := range nodes {
+		g.AddNode(node)
+	}
+
+	// 依存関係を追加
+	// 通常のノード間: pkg1.A -> pkg2.B (pkg1 -> pkg2)
+	// パッケージノード間: package:pkg2 -> package:pkg3 (pkg2 -> pkg3)
+	g.AddEdge("pkg1.A", "pkg2.B")
+	g.AddEdge("package:pkg2", "package:pkg3")
+
+	result := CalculateStability(g)
+
+	if result == nil {
+		t.Fatal("CalculateStability returned nil")
+	}
+
+	if len(result.PackageStabilities) != 3 {
+		t.Errorf("Expected 3 package stabilities, got %d", len(result.PackageStabilities))
+	}
+
+	// pkg1の安定度検証
+	// pkg1: Ce=1 (pkg1->pkg2), Ca=0, I=1.0 (最も不安定)
+	pkg1Stability := result.PackageStabilities["pkg1"]
+	if pkg1Stability == nil {
+		t.Fatal("Package pkg1 stability not found")
+	}
+
+	if pkg1Stability.OutDegree != 1 {
+		t.Errorf("Package pkg1 OutDegree: expected 1, got %d", pkg1Stability.OutDegree)
+	}
+
+	if pkg1Stability.InDegree != 0 {
+		t.Errorf("Package pkg1 InDegree: expected 0, got %d", pkg1Stability.InDegree)
+	}
+
+	if pkg1Stability.Instability != 1.0 {
+		t.Errorf("Package pkg1 Instability: expected 1.0, got %.3f", pkg1Stability.Instability)
+	}
+
+	// pkg2の安定度検証
+	// pkg2: Ce=1 (pkg2->pkg3), Ca=1 (pkg1->pkg2), I=0.5 (中間)
+	pkg2Stability := result.PackageStabilities["pkg2"]
+	if pkg2Stability == nil {
+		t.Fatal("Package pkg2 stability not found")
+	}
+
+	if pkg2Stability.OutDegree != 1 {
+		t.Errorf("Package pkg2 OutDegree: expected 1, got %d", pkg2Stability.OutDegree)
+	}
+
+	if pkg2Stability.InDegree != 1 {
+		t.Errorf("Package pkg2 InDegree: expected 1, got %d", pkg2Stability.InDegree)
+	}
+
+	if pkg2Stability.Instability != 0.5 {
+		t.Errorf("Package pkg2 Instability: expected 0.5, got %.3f", pkg2Stability.Instability)
+	}
+
+	// pkg3の安定度検証
+	// pkg3: Ce=0, Ca=1 (pkg2->pkg3), I=0.0 (最も安定)
+	pkg3Stability := result.PackageStabilities["pkg3"]
+	if pkg3Stability == nil {
+		t.Fatal("Package pkg3 stability not found")
+	}
+
+	if pkg3Stability.OutDegree != 0 {
+		t.Errorf("Package pkg3 OutDegree: expected 0, got %d", pkg3Stability.OutDegree)
+	}
+
+	if pkg3Stability.InDegree != 1 {
+		t.Errorf("Package pkg3 InDegree: expected 1, got %d", pkg3Stability.InDegree)
+	}
+
+	if pkg3Stability.Instability != 0.0 {
+		t.Errorf("Package pkg3 Instability: expected 0.0, got %.3f", pkg3Stability.Instability)
+	}
+}
+
+func TestExtractPackageNameFromNodeID(t *testing.T) {
+	tests := []struct {
+		name     string
+		nodeID   string
+		expected string
+	}{
+		{
+			name:     "パッケージノードID",
+			nodeID:   "package:cmd",
+			expected: "cmd",
+		},
+		{
+			name:     "パッケージノードID（複雑なパッケージ名）",
+			nodeID:   "package:github.com/example/pkg",
+			expected: "github.com/example/pkg",
+		},
+		{
+			name:     "通常のノードID",
+			nodeID:   "cmd.Execute",
+			expected: "",
+		},
+		{
+			name:     "空文字列",
+			nodeID:   "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractPackageNameFromNodeID(tt.nodeID)
+			if result != tt.expected {
+				t.Errorf("extractPackageNameFromNodeID(%q) = %q, want %q", tt.nodeID, result, tt.expected)
+			}
+		})
+	}
+}

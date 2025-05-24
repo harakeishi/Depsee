@@ -5,6 +5,7 @@ import (
 
 	"github.com/harakeishi/depsee/internal/analyzer"
 	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/harakeishi/depsee/internal/utils"
 )
 
 // DependencyExtractor は依存関係抽出の戦略インターフェース
@@ -157,9 +158,9 @@ func (e *PackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g 
 
 		for _, imp := range pkg.Imports {
 			// 同リポジトリ内のパッケージかどうかを判定
-			if e.isLocalPackage(imp.Path) {
+			if utils.IsLocalPackage(imp.Path) {
 				// パッケージ名を抽出（パスの最後の部分）
-				targetPkgName := e.extractPackageName(imp.Path)
+				targetPkgName := utils.ExtractPackageName(imp.Path)
 				toID := NodeID("package:" + targetPkgName)
 
 				// 依存先パッケージが存在する場合のみエッジを追加
@@ -172,43 +173,87 @@ func (e *PackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g 
 	}
 }
 
-// isLocalPackage は指定されたimportパスが同リポジトリ内のパッケージかどうかを判定
-func (e *PackageDependencyExtractor) isLocalPackage(importPath string) bool {
-	// 標準ライブラリやサードパーティパッケージを除外
-	// 相対パス（./や../）または、go.modのmodule名で始まるパスを同リポジトリとみなす
-	if strings.HasPrefix(importPath, ".") {
-		return true
-	}
-
-	// TODO: go.modファイルを読み取ってmodule名を取得し、より正確な判定を行う
-	// 現在は簡易的に、標準ライブラリでないものを同リポジトリとみなす
-	return !e.isStandardLibrary(importPath)
+// CrossPackageDependencyExtractor はパッケージ間の関数呼び出しや型の使用を抽出
+type CrossPackageDependencyExtractor struct {
+	packageMap map[string]string // import alias -> package name のマッピング
 }
 
-// isStandardLibrary は標準ライブラリかどうかを判定
-func (e *PackageDependencyExtractor) isStandardLibrary(importPath string) bool {
-	// 標準ライブラリの一般的なパッケージ
-	standardLibs := []string{
-		"fmt", "os", "io", "net", "http", "time", "strings", "strconv",
-		"context", "sync", "encoding", "crypto", "database", "go",
-		"bufio", "bytes", "compress", "container", "debug", "errors",
-		"expvar", "flag", "hash", "html", "image", "index", "log",
-		"math", "mime", "path", "reflect", "regexp", "runtime", "sort",
-		"syscall", "testing", "text", "unicode", "unsafe",
+// NewCrossPackageDependencyExtractor は新しいCrossPackageDependencyExtractorを作成
+func NewCrossPackageDependencyExtractor() *CrossPackageDependencyExtractor {
+	return &CrossPackageDependencyExtractor{
+		packageMap: make(map[string]string),
 	}
+}
 
-	for _, lib := range standardLibs {
-		if importPath == lib || strings.HasPrefix(importPath, lib+"/") {
-			return true
+func (e *CrossPackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
+	logger.Debug("パッケージ間関数呼び出し依存関係抽出開始")
+
+	// パッケージごとのimport情報を構築（同じパッケージの複数ファイルをマージ）
+	packageImports := make(map[string]map[string]string) // package -> (alias -> import_path)
+	for _, pkg := range result.Packages {
+		if packageImports[pkg.Name] == nil {
+			packageImports[pkg.Name] = make(map[string]string)
+		}
+		for _, imp := range pkg.Imports {
+			alias := e.extractPackageAlias(imp.Path, imp.Alias)
+			packageImports[pkg.Name][alias] = imp.Path
 		}
 	}
 
-	// ドット（.）を含まないパッケージは標準ライブラリとみなす
-	return !strings.Contains(importPath, ".")
+	// 関数の本体から他パッケージの関数呼び出しを抽出
+	for _, f := range result.Functions {
+		fromID := NodeID(f.Package + "." + f.Name)
+		e.extractCrossPackageCalls(f.BodyCalls, f.Package, packageImports, fromID, g)
+	}
+
+	// メソッドの本体から他パッケージの関数呼び出しを抽出
+	for _, s := range result.Structs {
+		for _, m := range s.Methods {
+			fromID := NodeID(s.Package + "." + m.Name)
+			e.extractCrossPackageCalls(m.BodyCalls, s.Package, packageImports, fromID, g)
+		}
+	}
 }
 
-// extractPackageName はimportパスからパッケージ名を抽出
-func (e *PackageDependencyExtractor) extractPackageName(importPath string) string {
-	parts := strings.Split(importPath, "/")
-	return parts[len(parts)-1]
+func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []string, currentPkg string, packageImports map[string]map[string]string, fromID NodeID, g *DependencyGraph) {
+	imports := packageImports[currentPkg]
+	if imports == nil {
+		return
+	}
+
+	for _, call := range bodyCalls {
+		// パッケージ修飾子付きの呼び出しを検出（例：depsee.New, depsee.Config）
+		if strings.Contains(call, ".") {
+			parts := strings.Split(call, ".")
+			if len(parts) >= 2 {
+				pkgAlias := parts[0]
+				funcOrTypeName := parts[1]
+
+				// import情報からパッケージパスを取得
+				if importPath, ok := imports[pkgAlias]; ok {
+					// 同リポジトリ内のパッケージかどうかを判定
+					if utils.IsLocalPackage(importPath) {
+						targetPkgName := utils.ExtractPackageName(importPath)
+						toID := NodeID(targetPkgName + "." + funcOrTypeName)
+
+						// 依存先ノードが存在する場合のみエッジを追加
+						if _, ok := g.Nodes[toID]; ok {
+							g.AddEdge(fromID, toID)
+							logger.Debug("パッケージ間関数呼び出し依存関係追加", "from", fromID, "to", toID, "call", call)
+						} else {
+							logger.Debug("パッケージ間依存先ノード未発見", "from", fromID, "to", toID, "call", call)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (e *CrossPackageDependencyExtractor) extractPackageAlias(importPath, alias string) string {
+	if alias != "" {
+		return alias // "."や"_"も含めて、指定されたエイリアスをそのまま返す
+	}
+	// エイリアスがない場合はパッケージ名を使用
+	return utils.ExtractPackageName(importPath)
 }
