@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"os"
@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 
 func TestCLIVersion(t *testing.T) {
 	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", ".")
+	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v", err)
@@ -46,7 +46,7 @@ func TestCLIVersion(t *testing.T) {
 
 func TestCLIAnalyze(t *testing.T) {
 	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", ".")
+	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v", err)
@@ -54,7 +54,7 @@ func TestCLIAnalyze(t *testing.T) {
 	defer os.Remove("depsee_test")
 
 	// テストデータディレクトリのパス
-	testDataDir := "../../testdata/sample"
+	testDataDir := "../testdata/sample"
 	absPath, err := filepath.Abs(testDataDir)
 	if err != nil {
 		t.Fatalf("Failed to resolve test data directory: %v", err)
@@ -95,7 +95,7 @@ func TestCLIAnalyze(t *testing.T) {
 
 func TestCLIInvalidArguments(t *testing.T) {
 	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", ".")
+	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v", err)
@@ -125,14 +125,14 @@ func TestCLIInvalidArguments(t *testing.T) {
 
 func TestCLILogLevels(t *testing.T) {
 	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", ".")
+	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v", err)
 	}
 	defer os.Remove("depsee_test")
 
-	testDataDir := "../../testdata/sample"
+	testDataDir := "../testdata/sample"
 	absPath, err := filepath.Abs(testDataDir)
 	if err != nil {
 		t.Fatalf("Failed to resolve test data directory: %v", err)
@@ -158,14 +158,14 @@ func TestCLILogLevels(t *testing.T) {
 
 func TestCLIJSONLogFormat(t *testing.T) {
 	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", ".")
+	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v", err)
 	}
 	defer os.Remove("depsee_test")
 
-	testDataDir := "../../testdata/sample"
+	testDataDir := "../testdata/sample"
 	absPath, err := filepath.Abs(testDataDir)
 	if err != nil {
 		t.Fatalf("Failed to resolve test data directory: %v", err)
@@ -193,14 +193,14 @@ func TestCLIJSONLogFormat(t *testing.T) {
 
 func TestCLIIncludePackageDeps(t *testing.T) {
 	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", ".")
+	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v", err)
 	}
 	defer os.Remove("depsee_test")
 
-	testDataDir := "../../testdata/sample"
+	testDataDir := "../testdata/sample"
 	absPath, err := filepath.Abs(testDataDir)
 	if err != nil {
 		t.Fatalf("Failed to resolve test data directory: %v", err)
@@ -226,14 +226,14 @@ func TestCLIIncludePackageDeps(t *testing.T) {
 
 func TestCLIFlagPositions(t *testing.T) {
 	// バイナリをビルド
-	cmd := exec.Command("go", "build", "-o", "depsee_test", ".")
+	cmd := exec.Command("go", "build", "-o", "depsee_test", "..")
 	err := cmd.Run()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v", err)
 	}
 	defer os.Remove("depsee_test")
 
-	testDataDir := "../../testdata/sample"
+	testDataDir := "../testdata/sample"
 	absPath, err := filepath.Abs(testDataDir)
 	if err != nil {
 		t.Fatalf("Failed to resolve test data directory: %v", err)
