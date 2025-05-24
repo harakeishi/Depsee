@@ -104,6 +104,11 @@ type nodeWithStability struct {
 }
 
 func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult) string {
+	return GenerateMermaidWithOptions(g, stability, false)
+}
+
+// GenerateMermaidWithOptions はオプション付きでMermaid記法の相関図を生成
+func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.StabilityResult, highlightSDPViolations bool) string {
 
 	// パッケージごとにノードをグループ化（パッケージノードは除外）
 	packageNodes := make(map[string][]nodeWithStability)
@@ -150,6 +155,16 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 	// ノードIDのマッピングを作成
 	idMapping := make(map[graph.NodeID]string)
 
+	// SDP違反のエッジを特定（ハイライト機能が有効な場合）
+	var sdpViolationEdges map[string]bool
+	if highlightSDPViolations {
+		sdpViolationEdges = make(map[string]bool)
+		for _, violation := range stability.SDPViolations {
+			edgeKey := fmt.Sprintf("%s->%s", violation.From, violation.To)
+			sdpViolationEdges[edgeKey] = true
+		}
+	}
+
 	// パッケージごとにサブグラフを作成
 	for _, pkg := range packages {
 		nodes := packageNodes[pkg]
@@ -179,6 +194,9 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 	}
 
 	// エッジ定義（パッケージノード間のエッジは除外）
+	var violationEdgeIndices []int
+	edgeIndex := 0
+
 	for from, tos := range g.Edges {
 		// パッケージノードからのエッジは除外
 		fromNode := g.Nodes[from]
@@ -202,7 +220,17 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 			if safeToID == "" {
 				safeToID = sanitizeNodeID(string(to))
 			}
+
 			out += fmt.Sprintf("    %s --> %s\n", safeFromID, safeToID)
+
+			// SDP違反のエッジかチェック
+			if highlightSDPViolations && sdpViolationEdges != nil {
+				edgeKey := fmt.Sprintf("%s->%s", from, to)
+				if sdpViolationEdges[edgeKey] {
+					violationEdgeIndices = append(violationEdgeIndices, edgeIndex)
+				}
+			}
+			edgeIndex++
 		}
 	}
 
@@ -212,6 +240,14 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 	// ノードにスタイルクラスを適用
 	out += applyNodeStyles(packageNodes)
 
+	// SDP違反のエッジに赤色のスタイルを適用
+	if highlightSDPViolations && len(violationEdgeIndices) > 0 {
+		out += "\n    %% SDP違反エッジのスタイル\n"
+		for _, index := range violationEdgeIndices {
+			out += fmt.Sprintf("    linkStyle %d stroke:#ff0000,stroke-width:3px\n", index)
+		}
+	}
+
 	return out
 }
 
@@ -219,29 +255,29 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 func getNodeShape(kind graph.NodeKind) func(string, float64) string {
 	switch kind {
 	case graph.NodeStruct:
-		// 構造体: 長方形
+		// 構造体: 長方形 + 構造体アイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("[%s<br>不安定度:%.2f]", name, instability)
+			return fmt.Sprintf("[📦 struct: %s<br>不安定度:%.2f]", name, instability)
 		}
 	case graph.NodeInterface:
-		// インターフェース: 菱形
+		// インターフェース: 菱形 + インターフェースアイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("{%s<br>不安定度:%.2f}", name, instability)
+			return fmt.Sprintf("{🔌 interface: %s<br>不安定度:%.2f}", name, instability)
 		}
 	case graph.NodeFunc:
-		// 関数: 角丸長方形
+		// 関数: 角丸長方形 + 関数アイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("(%s<br>不安定度:%.2f)", name, instability)
+			return fmt.Sprintf("(⚙️ func: %s<br>不安定度:%.2f)", name, instability)
 		}
 	case graph.NodePackage:
-		// パッケージ: 六角形
+		// パッケージ: 六角形 + パッケージアイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("{{%s<br>不安定度:%.2f}}", name, instability)
+			return fmt.Sprintf("{{📁 package: %s<br>不安定度:%.2f}}", name, instability)
 		}
 	default:
 		// デフォルト: 長方形
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("[%s<br>不安定度:%.2f]", name, instability)
+			return fmt.Sprintf("[❓ unknown: %s<br>不安定度:%.2f]", name, instability)
 		}
 	}
 }
@@ -250,9 +286,13 @@ func getNodeShape(kind graph.NodeKind) func(string, float64) string {
 func generateStyles() string {
 	return `
     %% スタイル定義
+    %% 構造体: 青系（データ構造を表現）
     classDef structStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    %% インターフェース: 紫系（抽象化を表現）
     classDef interfaceStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    %% 関数: 緑系（処理・動作を表現）
     classDef funcStyle fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    %% パッケージ: オレンジ系（グループ化を表現）
     classDef packageStyle fill:#fff3e0,stroke:#e65100,stroke-width:3px
 `
 }

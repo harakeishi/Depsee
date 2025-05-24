@@ -487,3 +487,116 @@ func TestExtractPackageNameFromNodeID(t *testing.T) {
 		})
 	}
 }
+
+func TestDetectSDPViolations(t *testing.T) {
+	g := NewDependencyGraph()
+
+	// SDP違反を含むテスト用のノードを作成
+	nodes := []*Node{
+		{ID: "test.Stable", Kind: NodeStruct, Name: "Stable", Package: "test"},
+		{ID: "test.Unstable", Kind: NodeStruct, Name: "Unstable", Package: "test"},
+	}
+
+	for _, node := range nodes {
+		g.AddNode(node)
+	}
+
+	// 依存関係を追加（SDP違反を含む）
+	// Stable -> Unstable (SDP違反: 安定 -> 不安定)
+	// Stable: Ce=1, Ca=0, I=1.0 (不安定)
+	// Unstable: Ce=0, Ca=1, I=0.0 (安定)
+	// これは逆転しているため、実際にはStableが不安定でUnstableが安定になる
+	// 正しいSDP違反を作るため、逆にする
+	g.AddEdge("test.Unstable", "test.Stable") // 実際は Unstable(不安定) -> Stable(安定) で正常
+
+	// 実際のSDP違反を作るため、追加のノードと依存関係を作成
+	additionalNode := &Node{ID: "test.VeryUnstable", Kind: NodeStruct, Name: "VeryUnstable", Package: "test"}
+	g.AddNode(additionalNode)
+
+	// VeryUnstable -> Stable (正常: 不安定 -> 安定)
+	// Stable -> VeryUnstable (SDP違反: 安定 -> 不安定)
+	g.AddEdge("test.VeryUnstable", "test.Stable")
+	g.AddEdge("test.Stable", "test.VeryUnstable") // これがSDP違反になる
+
+	result := CalculateStability(g)
+
+	// 不安定度を確認
+	t.Logf("Stable不安定度: %.3f", result.NodeStabilities["test.Stable"].Instability)
+	t.Logf("Unstable不安定度: %.3f", result.NodeStabilities["test.Unstable"].Instability)
+	t.Logf("VeryUnstable不安定度: %.3f", result.NodeStabilities["test.VeryUnstable"].Instability)
+
+	// SDP違反が検出されることを確認
+	if len(result.SDPViolations) == 0 {
+		t.Error("SDP違反が検出されませんでした")
+	}
+
+	t.Logf("検出されたSDP違反数: %d", len(result.SDPViolations))
+	for i, violation := range result.SDPViolations {
+		t.Logf("違反%d: %s (%.3f) -> %s (%.3f), 違反度: %.3f",
+			i+1, violation.From, violation.FromInstability,
+			violation.To, violation.ToInstability, violation.ViolationSeverity)
+	}
+
+	// 少なくとも1つのSDP違反があることを確認
+	if len(result.SDPViolations) == 0 {
+		t.Error("SDP違反が検出されませんでした")
+	}
+
+	// 各違反について、不安定度の関係が正しいことを確認
+	for _, violation := range result.SDPViolations {
+		if violation.FromInstability >= violation.ToInstability {
+			t.Errorf("SDP違反の不安定度関係が正しくありません: From=%.3f, To=%.3f",
+				violation.FromInstability, violation.ToInstability)
+		}
+
+		// 違反度が正しく計算されているか確認
+		expectedSeverity := violation.ToInstability - violation.FromInstability
+		if math.Abs(violation.ViolationSeverity-expectedSeverity) > 0.001 {
+			t.Errorf("違反度が正しく計算されていません: expected=%.3f, got=%.3f",
+				expectedSeverity, violation.ViolationSeverity)
+		}
+	}
+}
+
+func TestDetectSDPViolationsNoViolations(t *testing.T) {
+	g := NewDependencyGraph()
+
+	// SDP違反のない理想的な依存関係を作成
+	nodes := []*Node{
+		{ID: "test.A", Kind: NodeStruct, Name: "A", Package: "test"},
+		{ID: "test.B", Kind: NodeStruct, Name: "B", Package: "test"},
+		{ID: "test.C", Kind: NodeStruct, Name: "C", Package: "test"},
+	}
+
+	for _, node := range nodes {
+		g.AddNode(node)
+	}
+
+	// 理想的な依存関係: 不安定 -> 安定
+	// A -> B -> C (Aが最も不安定、Cが最も安定)
+	g.AddEdge("test.A", "test.B")
+	g.AddEdge("test.B", "test.C")
+
+	result := CalculateStability(g)
+
+	// SDP違反がないことを確認
+	if len(result.SDPViolations) != 0 {
+		t.Errorf("SDP違反が検出されましたが、期待されていません。違反数: %d", len(result.SDPViolations))
+		for i, violation := range result.SDPViolations {
+			t.Logf("予期しない違反%d: %s (%.3f) -> %s (%.3f)",
+				i+1, violation.From, violation.FromInstability,
+				violation.To, violation.ToInstability)
+		}
+	}
+}
+
+func TestDetectSDPViolationsEmptyGraph(t *testing.T) {
+	g := NewDependencyGraph()
+
+	result := CalculateStability(g)
+
+	// 空のグラフではSDP違反はない
+	if len(result.SDPViolations) != 0 {
+		t.Errorf("空のグラフでSDP違反が検出されました。違反数: %d", len(result.SDPViolations))
+	}
+}

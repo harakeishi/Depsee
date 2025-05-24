@@ -7,7 +7,8 @@ import (
 
 var (
 	// analyzeコマンド専用フラグ
-	includePackageDeps bool
+	includePackageDeps     bool
+	highlightSDPViolations bool
 )
 
 // analyzeCmd はanalyzeサブコマンドを表します
@@ -31,16 +32,18 @@ func init() {
 
 	// analyzeコマンド専用フラグ
 	analyzeCmd.Flags().BoolVar(&includePackageDeps, "include-package-deps", false, "同リポジトリ内のパッケージ間依存関係を解析")
+	analyzeCmd.Flags().BoolVar(&highlightSDPViolations, "highlight-sdp-violations", false, "SDP（Stable Dependencies Principle）違反のエッジを赤色でハイライト")
 }
 
 // runAnalyze はanalyzeコマンドの実行ロジック
 func runAnalyze(cmd *cobra.Command, args []string) error {
 	// 設定を構築
 	config := depsee.Config{
-		TargetDir:          args[0],
-		IncludePackageDeps: includePackageDeps,
-		LogLevel:           GetLogLevel(),
-		LogFormat:          GetLogFormat(),
+		TargetDir:              args[0],
+		IncludePackageDeps:     includePackageDeps,
+		HighlightSDPViolations: highlightSDPViolations,
+		LogLevel:               GetLogLevel(),
+		LogFormat:              GetLogFormat(),
 	}
 
 	// Depseeインスタンスを作成して実行

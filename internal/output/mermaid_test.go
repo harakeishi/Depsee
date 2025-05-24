@@ -211,7 +211,7 @@ func TestGenerateMermaidWithReservedWords(t *testing.T) {
 	}
 
 	// ラベルが正しくエスケープされているかチェック
-	if !strings.Contains(result, `[graph<br>不安定度:1.00]`) {
+	if !strings.Contains(result, `[📦 struct: graph<br>不安定度:1.00]`) {
 		t.Error("ノードラベルが正しく出力されていません")
 	}
 
@@ -371,4 +371,104 @@ func TestGenerateMermaidWithPackageStability(t *testing.T) {
 	}
 
 	t.Logf("生成されたMermaid出力:\n%s", result)
+}
+
+func TestGenerateMermaidWithSDPViolations(t *testing.T) {
+	// SDP違反を含むテスト用の依存グラフを作成
+	g := graph.NewDependencyGraph()
+
+	// 不安定度が異なるノードを追加
+	stableNode := &graph.Node{
+		ID:      "pkg.Stable",
+		Kind:    graph.NodeStruct,
+		Name:    "Stable",
+		Package: "pkg",
+	}
+	unstableNode := &graph.Node{
+		ID:      "pkg.Unstable",
+		Kind:    graph.NodeStruct,
+		Name:    "Unstable",
+		Package: "pkg",
+	}
+	normalNode := &graph.Node{
+		ID:      "pkg.Normal",
+		Kind:    graph.NodeStruct,
+		Name:    "Normal",
+		Package: "pkg",
+	}
+
+	g.AddNode(stableNode)
+	g.AddNode(unstableNode)
+	g.AddNode(normalNode)
+
+	// エッジを追加（SDP違反を含む）
+	g.AddEdge("pkg.Stable", "pkg.Unstable") // SDP違反: 安定 → 不安定
+	g.AddEdge("pkg.Unstable", "pkg.Normal") // 正常: 不安定 → 中間
+	g.AddEdge("pkg.Normal", "pkg.Stable")   // 正常: 中間 → 安定
+
+	// 安定度情報を作成（SDP違反が発生するように設定）
+	stability := &graph.StabilityResult{
+		NodeStabilities: map[graph.NodeID]*graph.NodeStability{
+			"pkg.Stable": {
+				NodeID:      "pkg.Stable",
+				OutDegree:   1,   // 1つに依存
+				InDegree:    1,   // 1つから依存される
+				Instability: 0.5, // 中間の不安定度
+			},
+			"pkg.Unstable": {
+				NodeID:      "pkg.Unstable",
+				OutDegree:   1,   // 1つに依存
+				InDegree:    1,   // 1つから依存される
+				Instability: 0.5, // 中間の不安定度（実際は同じだが、テストのため）
+			},
+			"pkg.Normal": {
+				NodeID:      "pkg.Normal",
+				OutDegree:   1,   // 1つに依存
+				InDegree:    1,   // 1つから依存される
+				Instability: 0.5, // 中間の不安定度
+			},
+		},
+		SDPViolations: []graph.SDPViolation{
+			{
+				From:              "pkg.Stable",
+				To:                "pkg.Unstable",
+				FromInstability:   0.2, // より安定
+				ToInstability:     0.8, // より不安定
+				ViolationSeverity: 0.6,
+			},
+		},
+	}
+
+	// SDP違反ハイライトなしでMermaid出力を生成
+	resultWithoutHighlight := GenerateMermaidWithOptions(g, stability, false)
+
+	// SDP違反ハイライトありでMermaid出力を生成
+	resultWithHighlight := GenerateMermaidWithOptions(g, stability, true)
+
+	// 結果の検証
+	if !strings.Contains(resultWithoutHighlight, "graph TD") {
+		t.Error("ハイライトなしの出力にgraph TDが含まれていません")
+	}
+
+	if !strings.Contains(resultWithHighlight, "graph TD") {
+		t.Error("ハイライトありの出力にgraph TDが含まれていません")
+	}
+
+	// SDP違反ハイライトなしの場合、linkStyleが含まれていないことを確認
+	if strings.Contains(resultWithoutHighlight, "linkStyle") {
+		t.Error("ハイライトなしの出力にlinkStyleが含まれています")
+	}
+
+	// SDP違反ハイライトありの場合、linkStyleが含まれていることを確認
+	if !strings.Contains(resultWithHighlight, "linkStyle") {
+		t.Error("ハイライトありの出力にlinkStyleが含まれていません")
+	}
+
+	// 赤色のスタイルが適用されていることを確認
+	if !strings.Contains(resultWithHighlight, "stroke:#ff0000") {
+		t.Error("SDP違反エッジに赤色のスタイルが適用されていません")
+	}
+
+	t.Logf("SDP違反ハイライトなしの出力:\n%s", resultWithoutHighlight)
+	t.Logf("SDP違反ハイライトありの出力:\n%s", resultWithHighlight)
 }

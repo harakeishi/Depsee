@@ -19,9 +19,19 @@ type PackageStability struct {
 	Instability float64 // I = Ce / (Ca + Ce): 不安定度（0=安定、1=不安定）
 }
 
+// SDPViolation はSDP（Stable Dependencies Principle）違反を表す
+type SDPViolation struct {
+	From              NodeID  // 依存元ノード
+	To                NodeID  // 依存先ノード
+	FromInstability   float64 // 依存元の不安定度
+	ToInstability     float64 // 依存先の不安定度
+	ViolationSeverity float64 // 違反の深刻度（不安定度の差）
+}
+
 type StabilityResult struct {
 	NodeStabilities    map[NodeID]*NodeStability
 	PackageStabilities map[string]*PackageStability
+	SDPViolations      []SDPViolation // SDP違反のリスト
 }
 
 // CalculateStability: 依存グラフから各ノードの不安定度を算出
@@ -62,6 +72,9 @@ func CalculateStability(g *DependencyGraph) *StabilityResult {
 
 	// パッケージレベルの不安定度計算
 	result.PackageStabilities = calculatePackageStability(g)
+
+	// SDP違反の検出
+	result.SDPViolations = detectSDPViolations(g, result.NodeStabilities)
 
 	return result
 }
@@ -186,4 +199,38 @@ func extractPackageNameFromNodeID(nodeID string) string {
 		return strings.TrimPrefix(nodeID, "package:")
 	}
 	return ""
+}
+
+// detectSDPViolations はSDP（Stable Dependencies Principle）違反を検出
+func detectSDPViolations(g *DependencyGraph, nodeStabilities map[NodeID]*NodeStability) []SDPViolation {
+	var violations []SDPViolation
+
+	for from, tos := range g.Edges {
+		fromStability, fromExists := nodeStabilities[from]
+		if !fromExists {
+			continue
+		}
+
+		for to := range tos {
+			toStability, toExists := nodeStabilities[to]
+			if !toExists {
+				continue
+			}
+
+			// SDP違反の条件: 依存元の不安定度 < 依存先の不安定度
+			// （より安定なものがより不安定なものに依存している）
+			if fromStability.Instability < toStability.Instability {
+				violation := SDPViolation{
+					From:              from,
+					To:                to,
+					FromInstability:   fromStability.Instability,
+					ToInstability:     toStability.Instability,
+					ViolationSeverity: toStability.Instability - fromStability.Instability,
+				}
+				violations = append(violations, violation)
+			}
+		}
+	}
+
+	return violations
 }

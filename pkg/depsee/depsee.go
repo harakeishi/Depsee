@@ -12,10 +12,11 @@ import (
 
 // Config は解析の設定を表します
 type Config struct {
-	TargetDir          string
-	IncludePackageDeps bool
-	LogLevel           string
-	LogFormat          string
+	TargetDir              string
+	IncludePackageDeps     bool
+	HighlightSDPViolations bool
+	LogLevel               string
+	LogFormat              string
 }
 
 // Depsee はメインのアプリケーションロジックを表します
@@ -89,8 +90,27 @@ func (d *Depsee) Analyze(config Config) error {
 	stability := graph.CalculateStability(dependencyGraph)
 	d.displayStability(stability)
 
+	// SDP違反の表示
+	if len(stability.SDPViolations) > 0 {
+		fmt.Println("[info] SDP違反:")
+		for _, violation := range stability.SDPViolations {
+			fmt.Printf("  %s (不安定度:%.2f) --> %s (不安定度:%.2f) [違反度:%.2f]\n",
+				violation.From, violation.FromInstability,
+				violation.To, violation.ToInstability,
+				violation.ViolationSeverity)
+		}
+	} else {
+		fmt.Println("[info] SDP違反: なし")
+	}
+
 	// Mermaid記法の相関図出力
-	mermaid := d.outputter.GenerateMermaid(dependencyGraph, stability)
+	var mermaid string
+	if config.HighlightSDPViolations {
+		// SDP違反ハイライト機能を使用
+		mermaid = d.outputter.GenerateMermaidWithOptions(dependencyGraph, stability, true)
+	} else {
+		mermaid = d.outputter.GenerateMermaid(dependencyGraph, stability)
+	}
 	fmt.Println("[info] Mermaid相関図:")
 	fmt.Println(mermaid)
 
