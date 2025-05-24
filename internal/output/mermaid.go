@@ -219,29 +219,29 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 func getNodeShape(kind graph.NodeKind) func(string, float64) string {
 	switch kind {
 	case graph.NodeStruct:
-		// 構造体: 長方形
+		// 構造体: 長方形 + 構造体アイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("[%s<br>不安定度:%.2f]", name, instability)
+			return fmt.Sprintf("[📦 struct: %s<br>不安定度:%.2f]", name, instability)
 		}
 	case graph.NodeInterface:
-		// インターフェース: 菱形
+		// インターフェース: 菱形 + インターフェースアイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("{%s<br>不安定度:%.2f}", name, instability)
+			return fmt.Sprintf("{🔌 interface: %s<br>不安定度:%.2f}", name, instability)
 		}
 	case graph.NodeFunc:
-		// 関数: 角丸長方形
+		// 関数: 角丸長方形 + 関数アイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("(%s<br>不安定度:%.2f)", name, instability)
+			return fmt.Sprintf("(⚙️ func: %s<br>不安定度:%.2f)", name, instability)
 		}
 	case graph.NodePackage:
-		// パッケージ: 六角形
+		// パッケージ: 六角形 + パッケージアイコン
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("{{%s<br>不安定度:%.2f}}", name, instability)
+			return fmt.Sprintf("{{📁 package: %s<br>不安定度:%.2f}}", name, instability)
 		}
 	default:
 		// デフォルト: 長方形
 		return func(name string, instability float64) string {
-			return fmt.Sprintf("[%s<br>不安定度:%.2f]", name, instability)
+			return fmt.Sprintf("[❓ unknown: %s<br>不安定度:%.2f]", name, instability)
 		}
 	}
 }
@@ -250,9 +250,13 @@ func getNodeShape(kind graph.NodeKind) func(string, float64) string {
 func generateStyles() string {
 	return `
     %% スタイル定義
+    %% 構造体: 青系（データ構造を表現）
     classDef structStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    %% インターフェース: 紫系（抽象化を表現）
     classDef interfaceStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    %% 関数: 緑系（処理・動作を表現）
     classDef funcStyle fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    %% パッケージ: オレンジ系（グループ化を表現）
     classDef packageStyle fill:#fff3e0,stroke:#e65100,stroke-width:3px
 `
 }
