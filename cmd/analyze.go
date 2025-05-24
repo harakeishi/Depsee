@@ -9,6 +9,9 @@ var (
 	// analyzeコマンド専用フラグ
 	includePackageDeps     bool
 	highlightSDPViolations bool
+	targetPackages         string
+	excludePackages        string
+	excludeDirs            string
 )
 
 // analyzeCmd はanalyzeサブコマンドを表します
@@ -22,7 +25,10 @@ var analyzeCmd = &cobra.Command{
 
 例:
   depsee analyze ./src
-  depsee analyze --include-package-deps ./src`,
+  depsee analyze --include-package-deps ./src
+  depsee analyze --target-packages main,cmd ./src
+  depsee analyze --exclude-packages test,mock ./src
+  depsee analyze --exclude-dirs testdata,vendor ./src`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAnalyze,
 }
@@ -33,6 +39,9 @@ func init() {
 	// analyzeコマンド専用フラグ
 	analyzeCmd.Flags().BoolVar(&includePackageDeps, "include-package-deps", false, "同リポジトリ内のパッケージ間依存関係を解析")
 	analyzeCmd.Flags().BoolVar(&highlightSDPViolations, "highlight-sdp-violations", false, "SDP（Stable Dependencies Principle）違反のエッジを赤色でハイライト")
+	analyzeCmd.Flags().StringVar(&targetPackages, "target-packages", "", "解析対象とするパッケージ名をカンマ区切りで指定（例: main,cmd）。指定しない場合は全パッケージが対象")
+	analyzeCmd.Flags().StringVar(&excludePackages, "exclude-packages", "", "解析対象から除外するパッケージ名をカンマ区切りで指定（例: test,mock,vendor）")
+	analyzeCmd.Flags().StringVar(&excludeDirs, "exclude-dirs", "", "解析対象から除外するディレクトリパスをカンマ区切りで指定（例: testdata,vendor,third_party）")
 }
 
 // runAnalyze はanalyzeコマンドの実行ロジック
@@ -42,6 +51,9 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		TargetDir:              args[0],
 		IncludePackageDeps:     includePackageDeps,
 		HighlightSDPViolations: highlightSDPViolations,
+		TargetPackages:         targetPackages,
+		ExcludePackages:        excludePackages,
+		ExcludeDirs:            excludeDirs,
 		LogLevel:               GetLogLevel(),
 		LogFormat:              GetLogFormat(),
 	}

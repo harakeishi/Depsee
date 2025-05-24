@@ -3,6 +3,7 @@ package depsee
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/harakeishi/depsee/internal/analyzer"
 	"github.com/harakeishi/depsee/internal/graph"
@@ -15,6 +16,9 @@ type Config struct {
 	TargetDir              string
 	IncludePackageDeps     bool
 	HighlightSDPViolations bool
+	TargetPackages         string
+	ExcludePackages        string
+	ExcludeDirs            string
 	LogLevel               string
 	LogFormat              string
 }
@@ -66,7 +70,29 @@ func (d *Depsee) Analyze(config Config) error {
 	d.logger.Info("解析開始", "target_dir", config.TargetDir)
 
 	// 解析実行
-	result, err := d.analyzer.AnalyzeDir(config.TargetDir)
+	var result *analyzer.AnalysisResult
+	var err error
+
+	// フィルタリング設定をパース
+	targetPackagesList := parseTargetPackages(config.TargetPackages)
+	excludePackagesList := parseTargetPackages(config.ExcludePackages)
+	excludeDirsList := parseTargetPackages(config.ExcludeDirs)
+
+	// フィルタリングが指定されている場合
+	if len(targetPackagesList) > 0 || len(excludePackagesList) > 0 || len(excludeDirsList) > 0 {
+		d.logger.Info("フィルタリング有効",
+			"target_packages", targetPackagesList,
+			"exclude_packages", excludePackagesList,
+			"exclude_dirs", excludeDirsList)
+		result, err = d.analyzer.AnalyzeDirWithFilters(config.TargetDir, targetPackagesList, excludePackagesList, excludeDirsList)
+	} else if config.TargetPackages != "" {
+		// 後方互換性のため、target-packagesのみの場合は既存メソッドを使用
+		d.logger.Info("パッケージフィルタリング有効", "target_packages", targetPackagesList)
+		result, err = d.analyzer.AnalyzeDirWithPackageFilter(config.TargetDir, targetPackagesList)
+	} else {
+		result, err = d.analyzer.AnalyzeDir(config.TargetDir)
+	}
+
 	if err != nil {
 		d.logger.Error("解析失敗", "error", err, "target_dir", config.TargetDir)
 		return err
@@ -115,6 +141,25 @@ func (d *Depsee) Analyze(config Config) error {
 	fmt.Println(mermaid)
 
 	return nil
+}
+
+// parseTargetPackages はカンマ区切りの文字列をパッケージ名のスライスに変換します
+func parseTargetPackages(targetPackages string) []string {
+	if targetPackages == "" {
+		return nil
+	}
+
+	packages := strings.Split(targetPackages, ",")
+	result := make([]string, 0, len(packages))
+
+	for _, pkg := range packages {
+		trimmed := strings.TrimSpace(pkg)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
 }
 
 // displayResults は解析結果を表示
