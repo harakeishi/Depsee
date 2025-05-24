@@ -5,9 +5,10 @@
 ```
 depsee/
 ├── cmd/                # CLIエントリポイント
-│   └── depsee/         # depseeコマンド本体
-│       ├── main.go
-│       └── main_test.go
+│   ├── analyze.go      # analyzeコマンド
+│   ├── root.go         # ルートコマンド
+│   ├── version.go      # versionコマンド
+│   └── main_test.go    # テスト
 ├── internal/           # 内部ロジック（パッケージ分割）
 │   ├── analyzer/       # 解析ロジック（AST解析・依存抽出）
 │   │   ├── analyzer.go
@@ -15,8 +16,6 @@ depsee/
 │   │   ├── interfaces.go
 │   │   ├── types.go
 │   │   └── type_resolver.go
-│   ├── cli/            # CLIロジック（引数解析・実行制御）
-│   │   └── cli.go
 │   ├── errors/         # エラーハンドリング
 │   │   └── errors.go
 │   ├── graph/          # 依存グラフ構築・安定度計算
@@ -28,12 +27,17 @@ depsee/
 │   │   └── stability_test.go
 │   ├── logger/         # ログ出力
 │   │   └── logger.go
-│   └── output/         # Mermaid記法など出力系
-│       ├── generator.go
-│       └── mermaid.go
+│   ├── output/         # Mermaid記法など出力系
+│   │   ├── generator.go
+│   │   └── mermaid.go
+│   └── utils/          # ユーティリティ関数
+├── pkg/depsee/         # パブリックAPI
+│   ├── depsee.go       # メインAPI
+│   └── depsee_test.go  # テスト
 ├── testdata/           # サンプルGoコード（テスト用）
 │   └── sample/
 ├── docs/               # 設計ドキュメント
+├── main.go             # エントリポイント
 ├── go.mod
 ├── go.sum
 ├── .gitignore
@@ -45,11 +49,20 @@ depsee/
 
 ## 主要ファイル・役割
 
-- `cmd/depsee/main.go`  
-  CLIエントリポイント。CLIインスタンスの作成と実行。
+- `main.go`  
+  CLIエントリポイント。cmdパッケージのExecute()を呼び出し。
 
-- `internal/cli/cli.go`  
-  CLIロジック。引数パース、サブコマンド分岐、各機能呼び出し、結果表示。
+- `cmd/root.go`  
+  ルートコマンドの定義。グローバルフラグとログ設定の初期化。
+
+- `cmd/analyze.go`  
+  analyzeサブコマンドの実装。引数パース、設定構築、解析実行。
+
+- `cmd/version.go`  
+  versionサブコマンドの実装。バージョン情報の表示。
+
+- `pkg/depsee/depsee.go`  
+  メインAPIの実装。設定に基づく解析の実行と結果表示。
 
 - `internal/analyzer/analyzer.go`  
   ディレクトリ走査、GoファイルのAST解析、構造体・関数・インターフェース抽出。
@@ -113,10 +126,8 @@ depsee/
 3. `internal/analyzer/`のAST解析・抽出ロジック実装
 4. `internal/graph/`の依存グラフ構築・安定度計算実装
 5. `internal/output/`のMermaid出力実装
-6. `internal/cli/`のCLIロジック実装
-7. `internal/logger/`のログ機能実装
-8. `internal/errors/`のエラーハンドリング実装
-9. 包括的なテストスイートの実装
+6. `internal/errors/`のエラーハンドリング実装
+7. 包括的なテストスイートの実装
 
 ---
 

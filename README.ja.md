@@ -82,13 +82,16 @@ depsee analyze --exclude-packages test,mock ./path/to/your/project
 depsee analyze --exclude-dirs testdata,vendor ./path/to/your/project
 
 # バージョン表示
-depsee -version
+depsee version
 
 # デバッグログ付きで実行
 depsee -log-level debug analyze ./path/to/project
 
 # JSONログフォーマットで実行
 depsee -log-format json analyze ./path/to/project
+
+# SDP違反を赤色でハイライト
+depsee analyze --highlight-sdp-violations ./path/to/your/project
 ```
 
 ### パッケージフィルタリング
@@ -140,6 +143,23 @@ depsee analyze --target-packages main,cmd --exclude-packages test --exclude-dirs
 - **効率的な解析**: 除外により処理時間を短縮し、関心のある部分に集中できます
 - **柔軟な設定**: パッケージレベルとディレクトリレベルの両方で除外設定が可能です
 - **組み合わせ可能**: target-packagesと組み合わせて、より細かい制御が可能です
+
+### SDP違反ハイライト機能
+
+`--highlight-sdp-violations` オプションを使用すると、安定依存の原則（SDP）の違反を赤色でハイライトできます：
+
+```bash
+# 出力図でSDP違反を赤色でハイライト
+depsee analyze --highlight-sdp-violations ./your-project
+
+# 他のオプションと組み合わせて使用
+depsee analyze --target-packages main,cmd --highlight-sdp-violations ./your-project
+```
+
+この機能により、以下のメリットがあります：
+- **視覚的な識別**: Mermaid図でSDP違反が赤色でハイライトされます
+- **SOLID原則の遵守**: 安定したコンポーネントが不安定なコンポーネントに依存している箇所を特定できます
+- **コード品質の向上**: アーキテクチャの安定性を向上させるリファクタリングを支援します
 
 ### パッケージ間依存関係解析
 
@@ -224,14 +244,15 @@ graph TD
 
 ```
 depsee/
-├── cmd/depsee/           # CLIエントリポイント
+├── cmd/                  # CLIエントリポイント
 ├── internal/
 │   ├── analyzer/         # 静的解析ロジック
-│   ├── cli/              # CLIロジック
 │   ├── errors/           # エラーハンドリング
 │   ├── graph/            # 依存グラフ・安定度算出
 │   ├── logger/           # ログ機能
-│   └── output/           # Mermaid出力
+│   ├── output/           # Mermaid出力
+│   └── utils/            # ユーティリティ関数
+├── pkg/depsee/           # パブリックAPI
 ├── testdata/sample/      # サンプルGoコード・テスト用
 └── docs/                 # 設計ドキュメント
 ```

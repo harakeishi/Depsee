@@ -82,13 +82,16 @@ depsee analyze --exclude-packages test,mock ./path/to/your/project
 depsee analyze --exclude-dirs testdata,vendor ./path/to/your/project
 
 # Show version
-depsee -version
+depsee version
 
 # Run with debug logging
 depsee -log-level debug analyze ./path/to/project
 
 # Run with JSON log format
 depsee -log-format json analyze ./path/to/project
+
+# Highlight SDP violations in red
+depsee analyze --highlight-sdp-violations ./path/to/your/project
 ```
 
 ### Package Filtering
@@ -140,6 +143,23 @@ This feature provides the following benefits:
 - **Efficient analysis**: Reduce processing time and focus on relevant parts through exclusion
 - **Flexible configuration**: Exclusion settings available at both package and directory levels
 - **Combinable**: Can be combined with target-packages for finer control
+
+### SDP Violation Highlighting
+
+Using the `--highlight-sdp-violations` option, you can highlight violations of the Stable Dependencies Principle (SDP) in red:
+
+```bash
+# Highlight SDP violations in the output diagram
+depsee analyze --highlight-sdp-violations ./your-project
+
+# Combine with other options
+depsee analyze --target-packages main,cmd --highlight-sdp-violations ./your-project
+```
+
+This feature provides the following benefits:
+- **Visual identification**: SDP violations are highlighted in red in the Mermaid diagram
+- **SOLID principle compliance**: Helps identify where stable components depend on unstable ones
+- **Code quality improvement**: Assists in refactoring to improve architectural stability
 
 ### Inter-package Dependency Analysis
 
@@ -224,14 +244,15 @@ The tool can also detect violations of the Stable Dependencies Principle (SDP), 
 
 ```
 depsee/
-├── cmd/depsee/           # CLI entry point
+├── cmd/                  # CLI entry point
 ├── internal/
 │   ├── analyzer/         # Static analysis logic
-│   ├── cli/              # CLI logic
 │   ├── errors/           # Error handling
 │   ├── graph/            # Dependency graph & stability calculation
 │   ├── logger/           # Logging functionality
-│   └── output/           # Mermaid output
+│   ├── output/           # Mermaid output
+│   └── utils/            # Utility functions
+├── pkg/depsee/           # Public API
 ├── testdata/sample/      # Sample Go code for testing
 └── docs/                 # Design documentation
 ```
