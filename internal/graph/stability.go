@@ -11,7 +11,7 @@ type StabilityResult struct {
 	NodeStabilities map[NodeID]*NodeStability
 }
 
-// CalculateStability: 依存グラフから各ノードの安定度を算出
+// CalculateStability: 依存グラフから各ノードの不安定度を算出
 func CalculateStability(g *DependencyGraph) *StabilityResult {
 	inDegree := make(map[NodeID]int)
 	outDegree := make(map[NodeID]int)

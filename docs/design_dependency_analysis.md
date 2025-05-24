@@ -49,6 +49,7 @@
 5. **依存グラフへの格納**
     - 依存元・依存先のノードをエッジで接続
     - 重複エッジは排除
+    - 戦略パターンを使用して依存関係抽出ロジックを分離
 
 ---
 
@@ -82,6 +83,22 @@ type DependencyGraph struct {
     Nodes map[NodeID]*Node
     Edges map[NodeID]map[NodeID]struct{} // From→Toの多重辺排除
 }
+
+// 依存関係抽出の戦略パターン
+type DependencyExtractor interface {
+    Extract(result *analyzer.AnalysisResult, graph *DependencyGraph)
+}
+
+// フィールド依存抽出
+type FieldDependencyExtractor struct {
+    typeResolver *analyzer.TypeResolver
+}
+
+// シグネチャ依存抽出
+type SignatureDependencyExtractor struct{}
+
+// 本体呼び出し依存抽出
+type BodyCallDependencyExtractor struct{}
 ```
 
 ---

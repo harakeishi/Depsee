@@ -138,7 +138,7 @@ func (c *CLI) execute(config *Config) error {
 	dependencyGraph := c.grapher.BuildDependencyGraph(result)
 	c.displayGraph(dependencyGraph)
 
-	// 安定度算出
+	// 不安定度算出
 	stability := graph.CalculateStability(dependencyGraph)
 	c.displayStability(stability)
 
@@ -186,10 +186,10 @@ func (c *CLI) displayGraph(g *graph.DependencyGraph) {
 	}
 }
 
-// displayStability は安定度を表示
+// displayStability は不安定度を表示
 func (c *CLI) displayStability(stability *graph.StabilityResult) {
-	fmt.Println("[info] ノード安定度:")
+	fmt.Println("[info] ノード不安定度:")
 	for id, s := range stability.NodeStabilities {
-		fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 安定度=%.2f\n", id, s.OutDegree, s.InDegree, s.Instability)
+		fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 不安定度=%.2f\n", id, s.OutDegree, s.InDegree, s.Instability)
 	}
 }

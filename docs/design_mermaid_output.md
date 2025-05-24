@@ -8,9 +8,9 @@
 
 ## 要件
 
-- 依存グラフ（ノード・エッジ情報）および各ノードの安定度情報を入力とする
+- 依存グラフ（ノード・エッジ情報）および各ノードの不安定度情報を入力とする
 - Mermaidの`graph TD`（Top Down）形式で出力
-- ノード（構造体・インターフェース・関数）ごとに安定度（Instability値）をラベルとして表示
+- ノード（構造体・インターフェース・関数）ごとに不安定度（Instability値）をラベルとして表示
 - エッジは依存関係を表現
 - 出力は標準出力またはファイル出力に対応
 - ノード名の重複を避けるため、パッケージ名等で一意化
@@ -21,7 +21,7 @@
 ## 入力
 
 - 依存グラフ（DependencyGraph）
-- 各ノードの安定度情報（StabilityResult）
+- 各ノードの不安定度情報（StabilityResult）
 
 ---
 
@@ -34,7 +34,7 @@
 ## 主な処理フロー
 
 1. **ノードのMermaidラベル生成**
-    - ノード名（例: `StructA`）＋安定度（例: `安定度:0.8`）をラベル化
+    - ノード名（例: `StructA`）＋不安定度（例: `不安定度:0.8`）をラベル化
     - 必要に応じてパッケージ名等で一意化
 
 2. **エッジのMermaid記法生成**
@@ -54,8 +54,8 @@
 
 ```mermaid
 graph TD
-    pkgA.StructA["StructA\n安定度:0.8"]
-    pkgA.StructB["StructB\n安定度:0.3"]
+    pkgA.StructA["StructA\n不安定度:0.8"]
+    pkgA.StructB["StructB\n不安定度:0.3"]
     pkgA.StructA --> pkgA.StructB
 ```
 

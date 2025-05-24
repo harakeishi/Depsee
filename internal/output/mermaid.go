@@ -23,14 +23,14 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 			ID: id, Name: n.Name, Instability: inst,
 		})
 	}
-	// 安定度降順でソート
+	// 不安定度降順でソート
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].Instability > nodes[j].Instability
 	})
 
 	out := "graph TD\n"
 	for _, n := range nodes {
-		out += fmt.Sprintf("    %s[\"%s<br>安定度:%.2f\"]\n", n.ID, n.Name, n.Instability)
+		out += fmt.Sprintf("    %s[\"%s<br>不安定度:%.2f\"]\n", n.ID, n.Name, n.Instability)
 	}
 	for from, tos := range g.Edges {
 		for to := range tos {
