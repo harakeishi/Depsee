@@ -1,3 +1,4 @@
+![logo](./logo.png)
 # depsee
 
 [![CI](https://github.com/harakeishi/Depsee/actions/workflows/ci.yml/badge.svg)](https://github.com/harakeishi/Depsee/actions/workflows/ci.yml)
