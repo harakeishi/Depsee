@@ -1,0 +1,97 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+jobs:
+  auto-release:
+    # chore:やdocs:で始まるコミットは除外
+    if: |
+      !startsWith(github.event.head_commit.message, 'chore:') && 
+      !startsWith(github.event.head_commit.message, 'docs:') &&
+      !startsWith(github.event.head_commit.message, 'ci:') &&
+      !contains(github.event.head_commit.message, '[skip release]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install semantic-release
+        run: |
+          npm install -g semantic-release @semantic-release/changelog @semantic-release/git @semantic-release/github
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # semantic-releaseの設定ファイルを作成
+          cat > .releaserc.json << 'EOF'
+          {
+            "branches": ["main"],
+            "plugins": [
+              "@semantic-release/commit-analyzer",
+              "@semantic-release/release-notes-generator",
+              [
+                "@semantic-release/changelog",
+                {
+                  "changelogFile": "CHANGELOG.md"
+                }
+              ],
+              [
+                "@semantic-release/exec",
+                {
+                  "prepareCmd": "sed -i 's/var version = \".*\"/var version = \"v${nextRelease.version}\"/' cmd/root.go"
+                }
+              ],
+              [
+                "@semantic-release/git",
+                {
+                  "assets": ["cmd/root.go", "CHANGELOG.md"],
+                  "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+                }
+              ],
+              "@semantic-release/github"
+            ]
+          }
+          EOF
+          
+          # semantic-releaseを実行
+          npx semantic-release
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Trigger GoReleaser
+        if: steps.get_tag.outputs.tag != ''
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: release-created
+          client-payload: '{"tag": "${{ steps.get_tag.outputs.tag }}"}' 

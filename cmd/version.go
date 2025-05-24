@@ -6,6 +6,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ビルド時に設定される変数
+var (
+	buildCommit = "none"
+	buildDate   = "unknown"
+)
+
+// GetBuildInfo はビルド情報を返します
+func GetBuildInfo() (string, string, string) {
+	return GetVersion(), buildCommit, buildDate
+}
+
 // versionCmd はversionサブコマンドを表します
 var versionCmd = &cobra.Command{
 	Use:   "version",
@@ -15,7 +26,10 @@ var versionCmd = &cobra.Command{
 例:
   depsee version`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("depsee %s\n", GetVersion())
+		v, c, d := GetBuildInfo()
+		fmt.Printf("depsee %s\n", v)
+		fmt.Printf("commit: %s\n", c)
+		fmt.Printf("built at: %s\n", d)
 	},
 }
 

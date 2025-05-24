@@ -1,5 +1,12 @@
 # depsee
 
+[![CI](https://github.com/harakeishi/Depsee/actions/workflows/ci.yml/badge.svg)](https://github.com/harakeishi/Depsee/actions/workflows/ci.yml)
+[![Release](https://github.com/harakeishi/Depsee/actions/workflows/auto-release-simple.yml/badge.svg)](https://github.com/harakeishi/Depsee/actions/workflows/auto-release-simple.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/harakeishi/depsee)](https://goreportcard.com/report/github.com/harakeishi/depsee)
+[![codecov](https://codecov.io/gh/harakeishi/Depsee/branch/main/graph/badge.svg)](https://codecov.io/gh/harakeishi/Depsee)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/harakeishi/Depsee)](https://github.com/harakeishi/Depsee/releases/latest)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fharakeishi%2Fdepsee-blue)](https://github.com/harakeishi/Depsee/pkgs/container/depsee)
+
 Goコードの構造体・関数・インターフェースの依存関係を可視化し、不安定度（変更容易度）をMermaid記法で出力するCLIツール
 
 ## 特徴
@@ -15,8 +22,47 @@ Goコードの構造体・関数・インターフェースの依存関係を可
 
 ## インストール
 
+### Go (推奨)
+
 ```bash
-go install github.com/harakeishi/depsee/cmd/depsee@latest
+go install github.com/harakeishi/depsee@latest
+```
+
+### Homebrew
+
+```bash
+# タップを追加
+brew tap harakeishi/tap
+
+# インストール
+brew install depsee
+```
+
+### Docker
+
+```bash
+# 最新版を使用
+docker pull ghcr.io/harakeishi/depsee:latest
+
+# 特定バージョンを使用
+docker pull ghcr.io/harakeishi/depsee:v1.0.0
+```
+
+### バイナリダウンロード
+
+[GitHub Releases](https://github.com/harakeishi/Depsee/releases/latest)から、お使いのプラットフォーム向けのバイナリをダウンロードできます：
+
+- **Linux**: `depsee_Linux_x86_64.tar.gz`
+- **macOS (Intel)**: `depsee_Darwin_x86_64.tar.gz`
+- **macOS (Apple Silicon)**: `depsee_Darwin_arm64.tar.gz`
+- **Windows**: `depsee_Windows_x86_64.zip`
+
+### ソースからビルド
+
+```bash
+git clone https://github.com/harakeishi/Depsee.git
+cd Depsee
+go build -o depsee .
 ```
 
 ## 使用方法
@@ -205,6 +251,145 @@ go test ./...
 ```bash
 go run cmd/depsee/main.go analyze ./testdata/sample
 ```
+
+## CI/CD & デプロイメント
+
+このプロジェクトは完全自動化されたCI/CDパイプラインを採用しており、コードの品質管理から自動リリースまでを自動化しています。
+
+### 🔄 継続的インテグレーション (CI)
+
+**トリガー**: `main`、`develop`ブランチへのプッシュ、および`main`ブランチへのプルリクエスト
+
+**実行内容**:
+- **マルチバージョンテスト**: Go 1.21、1.22、1.23での動作確認
+- **静的解析**: golangci-lintによるコード品質チェック
+- **テスト実行**: レースコンディション検出付きテスト
+- **カバレッジ測定**: Codecovへの自動アップロード
+- **マルチプラットフォームビルド**: Linux、macOS、Windows向けバイナリ生成
+
+```yaml
+# .github/workflows/ci.yml で定義
+- Linux (amd64)
+- macOS (amd64, arm64)  
+- Windows (amd64)
+```
+
+### 🚀 自動リリース
+
+**トリガー**: `main`ブランチへのプッシュ（特定のコミットタイプを除く）
+
+**自動バージョニング**:
+- **Major版** (`v1.0.0 → v2.0.0`): `feat!:`で始まるコミットまたは`BREAKING CHANGE`を含むコミット
+- **Minor版** (`v1.0.0 → v1.1.0`): `feat:`で始まるコミット
+- **Patch版** (`v1.0.0 → v1.0.1`): その他のコミット（`fix:`、`refactor:`など）
+
+**除外されるコミット**:
+- `chore:`で始まるコミット
+- `docs:`で始まるコミット
+- `ci:`で始まるコミット
+- `[skip release]`または`[skip ci]`を含むコミット
+
+**自動実行される処理**:
+1. 最新タグから次のバージョンを自動計算
+2. `cmd/root.go`のバージョン変数を自動更新
+3. バージョン更新をコミット・プッシュ
+4. 新しいタグを作成・プッシュ
+5. Go Releaserによるリリース作成
+
+### 📦 リリース成果物
+
+**バイナリ**:
+- `depsee_Linux_x86_64.tar.gz`
+- `depsee_Darwin_x86_64.tar.gz`
+- `depsee_Darwin_arm64.tar.gz`
+- `depsee_Windows_x86_64.zip`
+
+**コンテナイメージ**:
+- `ghcr.io/harakeishi/depsee:latest`
+- `ghcr.io/harakeishi/depsee:v{version}`
+
+**パッケージマネージャー**:
+- **Homebrew**: `brew install harakeishi/tap/depsee`
+- **Go**: `go install github.com/harakeishi/depsee@latest`
+
+**その他**:
+- チェックサムファイル (`checksums.txt`)
+- 自動生成されたリリースノート
+- CHANGELOGの自動更新
+
+### 🐳 Docker利用
+
+```bash
+# 最新版を実行
+docker run --rm -v $(pwd):/workspace ghcr.io/harakeishi/depsee:latest analyze /workspace
+
+# 特定バージョンを実行
+docker run --rm -v $(pwd):/workspace ghcr.io/harakeishi/depsee:v1.0.0 analyze /workspace
+```
+
+### 🔧 手動リリース
+
+自動リリースに加えて、手動でのリリースも可能です：
+
+```bash
+# 手動でタグを作成してリリース
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+### 📋 リリース例
+
+**パッチリリース**:
+```bash
+git commit -m "fix: バグを修正"
+git push origin main
+# → v1.0.0 → v1.0.1 に自動リリース
+```
+
+**マイナーリリース**:
+```bash
+git commit -m "feat: 新機能を追加"
+git push origin main
+# → v1.0.0 → v1.1.0 に自動リリース
+```
+
+**メジャーリリース**:
+```bash
+git commit -m "feat!: 破壊的変更を含む新機能"
+git push origin main
+# → v1.0.0 → v2.0.0 に自動リリース
+```
+
+**リリースをスキップ**:
+```bash
+git commit -m "docs: READMEを更新 [skip release]"
+git push origin main
+# → リリースされない
+```
+
+### 🔍 品質保証
+
+**静的解析設定** (`.golangci.yml`):
+- 40以上のlinterを有効化
+- プロジェクト固有の設定でコード品質を保証
+- テストファイルには緩和されたルールを適用
+
+**テスト戦略**:
+- ユニットテスト
+- レースコンディション検出
+- カバレッジ測定とレポート
+
+**セキュリティ**:
+- GitHub Container Registryへの安全な認証
+- 最小権限の原則に基づくワークフロー権限設定
+- Dockerイメージの脆弱性スキャン
+
+### 📊 監視とメトリクス
+
+- **ビルド状況**: GitHub Actionsのステータスバッジ
+- **コードカバレッジ**: Codecovによる可視化
+- **リリース履歴**: GitHub Releasesページで確認可能
+- **ダウンロード統計**: GitHub Releasesの統計情報
 
 ## アーキテクチャ
 
