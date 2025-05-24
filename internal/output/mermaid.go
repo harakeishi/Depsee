@@ -104,6 +104,11 @@ type nodeWithStability struct {
 }
 
 func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult) string {
+	return GenerateMermaidWithOptions(g, stability, false)
+}
+
+// GenerateMermaidWithOptions はオプション付きでMermaid記法の相関図を生成
+func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.StabilityResult, highlightSDPViolations bool) string {
 
 	// パッケージごとにノードをグループ化（パッケージノードは除外）
 	packageNodes := make(map[string][]nodeWithStability)
@@ -150,6 +155,16 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 	// ノードIDのマッピングを作成
 	idMapping := make(map[graph.NodeID]string)
 
+	// SDP違反のエッジを特定（ハイライト機能が有効な場合）
+	var sdpViolationEdges map[string]bool
+	if highlightSDPViolations {
+		sdpViolationEdges = make(map[string]bool)
+		for _, violation := range stability.SDPViolations {
+			edgeKey := fmt.Sprintf("%s->%s", violation.From, violation.To)
+			sdpViolationEdges[edgeKey] = true
+		}
+	}
+
 	// パッケージごとにサブグラフを作成
 	for _, pkg := range packages {
 		nodes := packageNodes[pkg]
@@ -179,6 +194,9 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 	}
 
 	// エッジ定義（パッケージノード間のエッジは除外）
+	var violationEdgeIndices []int
+	edgeIndex := 0
+
 	for from, tos := range g.Edges {
 		// パッケージノードからのエッジは除外
 		fromNode := g.Nodes[from]
@@ -202,7 +220,17 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 			if safeToID == "" {
 				safeToID = sanitizeNodeID(string(to))
 			}
+
 			out += fmt.Sprintf("    %s --> %s\n", safeFromID, safeToID)
+
+			// SDP違反のエッジかチェック
+			if highlightSDPViolations && sdpViolationEdges != nil {
+				edgeKey := fmt.Sprintf("%s->%s", from, to)
+				if sdpViolationEdges[edgeKey] {
+					violationEdgeIndices = append(violationEdgeIndices, edgeIndex)
+				}
+			}
+			edgeIndex++
 		}
 	}
 
@@ -211,6 +239,14 @@ func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult)
 
 	// ノードにスタイルクラスを適用
 	out += applyNodeStyles(packageNodes)
+
+	// SDP違反のエッジに赤色のスタイルを適用
+	if highlightSDPViolations && len(violationEdgeIndices) > 0 {
+		out += "\n    %% SDP違反エッジのスタイル\n"
+		for _, index := range violationEdgeIndices {
+			out += fmt.Sprintf("    linkStyle %d stroke:#ff0000,stroke-width:3px\n", index)
+		}
+	}
 
 	return out
 }

@@ -19,3 +19,8 @@ func NewOutputGenerator() OutputGenerator {
 func (g *Generator) GenerateMermaid(dependencyGraph *graph.DependencyGraph, stability *graph.StabilityResult) string {
 	return GenerateMermaid(dependencyGraph, stability)
 }
+
+// GenerateMermaidWithOptions はオプション付きでMermaid記法の相関図を生成
+func (g *Generator) GenerateMermaidWithOptions(dependencyGraph *graph.DependencyGraph, stability *graph.StabilityResult, highlightSDPViolations bool) string {
+	return GenerateMermaidWithOptions(dependencyGraph, stability, highlightSDPViolations)
+}
