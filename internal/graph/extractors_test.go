@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/harakeishi/depsee/internal/analyzer"
+	"github.com/harakeishi/depsee/internal/utils"
 )
 
 func TestPackageDependencyExtractor_Extract(t *testing.T) {
@@ -53,76 +54,6 @@ func TestPackageDependencyExtractor_Extract(t *testing.T) {
 	// 標準ライブラリへの依存関係は追加されていないことを確認
 	if _, ok := g.Edges["package:pkg1"]["package:time"]; ok {
 		t.Error("Unexpected edge to standard library package found")
-	}
-}
-
-func TestPackageDependencyExtractor_isStandardLibrary(t *testing.T) {
-	extractor := NewPackageDependencyExtractor("/test")
-
-	tests := []struct {
-		importPath string
-		expected   bool
-	}{
-		{"fmt", true},
-		{"time", true},
-		{"net/http", true},
-		{"github.com/user/repo", false},
-		{"example.com/pkg", false},
-		{"./relative", false},
-		{"../relative", false},
-	}
-
-	for _, test := range tests {
-		result := extractor.isStandardLibrary(test.importPath)
-		if result != test.expected {
-			t.Errorf("isStandardLibrary(%s) = %v, expected %v", test.importPath, result, test.expected)
-		}
-	}
-}
-
-func TestPackageDependencyExtractor_isLocalPackage(t *testing.T) {
-	extractor := NewPackageDependencyExtractor("/test")
-
-	tests := []struct {
-		importPath string
-		expected   bool
-	}{
-		{"fmt", false},
-		{"time", false},
-		{"net/http", false},
-		{"github.com/user/repo", true},
-		{"example.com/pkg", true},
-		{"./relative", true},
-		{"../relative", true},
-	}
-
-	for _, test := range tests {
-		result := extractor.isLocalPackage(test.importPath)
-		if result != test.expected {
-			t.Errorf("isLocalPackage(%s) = %v, expected %v", test.importPath, result, test.expected)
-		}
-	}
-}
-
-func TestPackageDependencyExtractor_extractPackageName(t *testing.T) {
-	extractor := NewPackageDependencyExtractor("/test")
-
-	tests := []struct {
-		importPath string
-		expected   string
-	}{
-		{"github.com/user/repo/pkg", "pkg"},
-		{"example.com/project/internal/service", "service"},
-		{"pkg", "pkg"},
-		{"./relative", "relative"},
-		{"../parent", "parent"},
-	}
-
-	for _, test := range tests {
-		result := extractor.extractPackageName(test.importPath)
-		if result != test.expected {
-			t.Errorf("extractPackageName(%s) = %s, expected %s", test.importPath, result, test.expected)
-		}
 	}
 }
 
@@ -210,84 +141,6 @@ func TestCrossPackageDependencyExtractor_Extract(t *testing.T) {
 	}
 }
 
-func TestCrossPackageDependencyExtractor_isStandardLibrary(t *testing.T) {
-	extractor := NewCrossPackageDependencyExtractor()
-
-	tests := []struct {
-		importPath string
-		expected   bool
-	}{
-		// 標準ライブラリ
-		{"fmt", true},
-		{"time", true},
-		{"net/http", true},
-		{"encoding/json", true},
-		{"crypto/sha256", true},
-		{"go/ast", true},
-
-		// 外部パッケージ
-		{"github.com/user/repo", false},
-		{"example.com/pkg", false},
-		{"golang.org/x/tools", false},
-
-		// 相対パス
-		{"./relative", false},
-		{"../relative", false},
-
-		// エッジケース
-		{"", false},
-		{".", false},
-
-		// 単一パッケージ名（標準ライブラリではない）
-		{"mypackage", false},
-		{"customlib", false},
-	}
-
-	for _, test := range tests {
-		result := extractor.isStandardLibrary(test.importPath)
-		if result != test.expected {
-			t.Errorf("isStandardLibrary(%s) = %v, expected %v", test.importPath, result, test.expected)
-		}
-	}
-}
-
-func TestCrossPackageDependencyExtractor_isLocalPackage(t *testing.T) {
-	extractor := NewCrossPackageDependencyExtractor()
-
-	tests := []struct {
-		importPath string
-		expected   bool
-	}{
-		// 標準ライブラリ（ローカルではない）
-		{"fmt", false},
-		{"time", false},
-		{"net/http", false},
-
-		// 外部パッケージ（ローカル）
-		{"github.com/user/repo", true},
-		{"example.com/pkg", true},
-
-		// 相対パス（ローカル）
-		{"./relative", true},
-		{"../relative", true},
-
-		// エッジケース
-		{"", true}, // 標準ライブラリではないのでローカル扱い
-		{".", true},
-
-		// 単一パッケージ名（標準ライブラリではないのでローカル扱い）
-		{"mypackage", true},
-		{"customlib", true},
-	}
-
-	for _, test := range tests {
-		result := extractor.isLocalPackage(test.importPath)
-		if result != test.expected {
-			t.Errorf("isLocalPackage(%s) = %v, expected %v", test.importPath, result, test.expected)
-		}
-	}
-}
-
 func TestCrossPackageDependencyExtractor_extractPackageAlias(t *testing.T) {
 	extractor := NewCrossPackageDependencyExtractor()
 
@@ -310,5 +163,32 @@ func TestCrossPackageDependencyExtractor_extractPackageAlias(t *testing.T) {
 			t.Errorf("extractPackageAlias(%s, %s) = %s, expected %s",
 				test.importPath, test.alias, result, test.expected)
 		}
+	}
+}
+
+// 共通ユーティリティ関数のテストは utils パッケージで実行されるため、
+// ここでは簡単な統合テストのみを行う
+func TestUtilsIntegration(t *testing.T) {
+	// 標準ライブラリの判定テスト
+	if !utils.IsStandardLibrary("fmt") {
+		t.Error("Expected fmt to be identified as standard library")
+	}
+
+	if utils.IsStandardLibrary("github.com/user/repo") {
+		t.Error("Expected github.com/user/repo to not be identified as standard library")
+	}
+
+	// パッケージ名抽出テスト
+	if utils.ExtractPackageName("github.com/user/repo/pkg") != "pkg" {
+		t.Error("Expected package name extraction to work correctly")
+	}
+
+	// ローカルパッケージ判定テスト
+	if utils.IsLocalPackage("fmt") {
+		t.Error("Expected fmt to not be identified as local package")
+	}
+
+	if !utils.IsLocalPackage("github.com/user/repo") {
+		t.Error("Expected github.com/user/repo to be identified as local package")
 	}
 }

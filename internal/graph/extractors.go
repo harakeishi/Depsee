@@ -5,6 +5,7 @@ import (
 
 	"github.com/harakeishi/depsee/internal/analyzer"
 	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/harakeishi/depsee/internal/utils"
 )
 
 // DependencyExtractor は依存関係抽出の戦略インターフェース
@@ -157,9 +158,9 @@ func (e *PackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g 
 
 		for _, imp := range pkg.Imports {
 			// 同リポジトリ内のパッケージかどうかを判定
-			if e.isLocalPackage(imp.Path) {
+			if utils.IsLocalPackage(imp.Path) {
 				// パッケージ名を抽出（パスの最後の部分）
-				targetPkgName := e.extractPackageName(imp.Path)
+				targetPkgName := utils.ExtractPackageName(imp.Path)
 				toID := NodeID("package:" + targetPkgName)
 
 				// 依存先パッケージが存在する場合のみエッジを追加
@@ -170,47 +171,6 @@ func (e *PackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g 
 			}
 		}
 	}
-}
-
-// isLocalPackage は指定されたimportパスが同リポジトリ内のパッケージかどうかを判定
-func (e *PackageDependencyExtractor) isLocalPackage(importPath string) bool {
-	// 標準ライブラリやサードパーティパッケージを除外
-	// 相対パス（./や../）または、go.modのmodule名で始まるパスを同リポジトリとみなす
-	if strings.HasPrefix(importPath, ".") {
-		return true
-	}
-
-	// TODO: go.modファイルを読み取ってmodule名を取得し、より正確な判定を行う
-	// 現在は簡易的に、標準ライブラリでないものを同リポジトリとみなす
-	return !e.isStandardLibrary(importPath)
-}
-
-// isStandardLibrary は標準ライブラリかどうかを判定
-func (e *PackageDependencyExtractor) isStandardLibrary(importPath string) bool {
-	// 標準ライブラリの一般的なパッケージ
-	standardLibs := []string{
-		"fmt", "os", "io", "net", "http", "time", "strings", "strconv",
-		"context", "sync", "encoding", "crypto", "database", "go",
-		"bufio", "bytes", "compress", "container", "debug", "errors",
-		"expvar", "flag", "hash", "html", "image", "index", "log",
-		"math", "mime", "path", "reflect", "regexp", "runtime", "sort",
-		"syscall", "testing", "text", "unicode", "unsafe",
-	}
-
-	for _, lib := range standardLibs {
-		if importPath == lib || strings.HasPrefix(importPath, lib+"/") {
-			return true
-		}
-	}
-
-	// ドット（.）を含まないパッケージは標準ライブラリとみなす
-	return !strings.Contains(importPath, ".")
-}
-
-// extractPackageName はimportパスからパッケージ名を抽出
-func (e *PackageDependencyExtractor) extractPackageName(importPath string) string {
-	parts := strings.Split(importPath, "/")
-	return parts[len(parts)-1]
 }
 
 // CrossPackageDependencyExtractor はパッケージ間の関数呼び出しや型の使用を抽出
@@ -272,8 +232,8 @@ func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []s
 				// import情報からパッケージパスを取得
 				if importPath, ok := imports[pkgAlias]; ok {
 					// 同リポジトリ内のパッケージかどうかを判定
-					if e.isLocalPackage(importPath) {
-						targetPkgName := e.extractPackageName(importPath)
+					if utils.IsLocalPackage(importPath) {
+						targetPkgName := utils.ExtractPackageName(importPath)
 						toID := NodeID(targetPkgName + "." + funcOrTypeName)
 
 						// 依存先ノードが存在する場合のみエッジを追加
@@ -295,86 +255,5 @@ func (e *CrossPackageDependencyExtractor) extractPackageAlias(importPath, alias 
 		return alias // "."や"_"も含めて、指定されたエイリアスをそのまま返す
 	}
 	// エイリアスがない場合はパッケージ名を使用
-	return e.extractPackageName(importPath)
-}
-
-func (e *CrossPackageDependencyExtractor) isLocalPackage(importPath string) bool {
-	// 相対パスは常にローカルパッケージ
-	if strings.HasPrefix(importPath, ".") {
-		return true
-	}
-
-	// 標準ライブラリの判定を改善
-	return !e.isStandardLibrary(importPath)
-}
-
-func (e *CrossPackageDependencyExtractor) isStandardLibrary(importPath string) bool {
-	// 空文字列やドットのみのパスは標準ライブラリではない
-	if importPath == "" || importPath == "." {
-		return false
-	}
-
-	// ドメイン名を含むパッケージ（例：github.com/user/repo）は外部パッケージ
-	if strings.Contains(importPath, ".") {
-		return false
-	}
-
-	// スラッシュを含まない単一パッケージ名は標準ライブラリの可能性が高い
-	if !strings.Contains(importPath, "/") {
-		return e.isKnownStandardLibrary(importPath)
-	}
-
-	// パスの最初の部分が標準ライブラリかチェック
-	parts := strings.Split(importPath, "/")
-	if len(parts) > 0 {
-		return e.isKnownStandardLibrary(parts[0])
-	}
-
-	return false
-}
-
-func (e *CrossPackageDependencyExtractor) isKnownStandardLibrary(pkgName string) bool {
-	// Go標準ライブラリの主要パッケージ
-	// 参考: https://pkg.go.dev/std
-	standardLibs := map[string]bool{
-		// Core packages
-		"builtin": true, "unsafe": true,
-
-		// Common packages
-		"fmt": true, "os": true, "io": true, "time": true, "strings": true, "strconv": true,
-		"context": true, "sync": true, "errors": true, "sort": true, "math": true,
-		"bytes": true, "bufio": true, "path": true, "reflect": true, "regexp": true,
-		"runtime": true, "syscall": true, "testing": true, "unicode": true,
-
-		// Network and HTTP
-		"net": true, "http": true,
-
-		// Encoding and crypto
-		"encoding": true, "crypto": true, "hash": true,
-
-		// Compression and containers
-		"compress": true, "container": true,
-
-		// Development and debugging
-		"debug": true, "expvar": true, "flag": true, "log": true,
-
-		// File and path handling
-		"filepath": true, "mime": true,
-
-		// HTML, image, and text processing
-		"html": true, "image": true, "text": true,
-
-		// Database and indexing
-		"database": true, "index": true,
-
-		// Go toolchain
-		"go": true,
-	}
-
-	return standardLibs[pkgName]
-}
-
-func (e *CrossPackageDependencyExtractor) extractPackageName(importPath string) string {
-	parts := strings.Split(importPath, "/")
-	return parts[len(parts)-1]
+	return utils.ExtractPackageName(importPath)
 }
