@@ -17,6 +17,8 @@ type Config struct {
 	IncludePackageDeps     bool
 	HighlightSDPViolations bool
 	TargetPackages         string
+	ExcludePackages        string
+	ExcludeDirs            string
 	LogLevel               string
 	LogFormat              string
 }
@@ -71,11 +73,22 @@ func (d *Depsee) Analyze(config Config) error {
 	var result *analyzer.AnalysisResult
 	var err error
 
-	// パッケージフィルタリングが指定されている場合
-	if config.TargetPackages != "" {
-		targetPackages := parseTargetPackages(config.TargetPackages)
-		d.logger.Info("パッケージフィルタリング有効", "target_packages", targetPackages)
-		result, err = d.analyzer.AnalyzeDirWithPackageFilter(config.TargetDir, targetPackages)
+	// フィルタリング設定をパース
+	targetPackagesList := parseTargetPackages(config.TargetPackages)
+	excludePackagesList := parseTargetPackages(config.ExcludePackages)
+	excludeDirsList := parseTargetPackages(config.ExcludeDirs)
+
+	// フィルタリングが指定されている場合
+	if len(targetPackagesList) > 0 || len(excludePackagesList) > 0 || len(excludeDirsList) > 0 {
+		d.logger.Info("フィルタリング有効",
+			"target_packages", targetPackagesList,
+			"exclude_packages", excludePackagesList,
+			"exclude_dirs", excludeDirsList)
+		result, err = d.analyzer.AnalyzeDirWithFilters(config.TargetDir, targetPackagesList, excludePackagesList, excludeDirsList)
+	} else if config.TargetPackages != "" {
+		// 後方互換性のため、target-packagesのみの場合は既存メソッドを使用
+		d.logger.Info("パッケージフィルタリング有効", "target_packages", targetPackagesList)
+		result, err = d.analyzer.AnalyzeDirWithPackageFilter(config.TargetDir, targetPackagesList)
 	} else {
 		result, err = d.analyzer.AnalyzeDir(config.TargetDir)
 	}
