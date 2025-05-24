@@ -19,3 +19,8 @@ func NewGraphBuilder() GraphBuilder {
 func (b *Builder) BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 	return BuildDependencyGraph(result)
 }
+
+// BuildDependencyGraphWithPackages はパッケージ間依存関係を含む依存グラフを構築
+func (b *Builder) BuildDependencyGraphWithPackages(result *analyzer.AnalysisResult, targetDir string) *DependencyGraph {
+	return BuildDependencyGraphWithPackages(result, targetDir)
+}

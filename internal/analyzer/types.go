@@ -60,3 +60,18 @@ func (f FuncInfo) GetReceiver() string         { return f.Receiver }
 func (f FuncInfo) GetParams() []FieldInfo      { return f.Params }
 func (f FuncInfo) GetResults() []FieldInfo     { return f.Results }
 func (f FuncInfo) GetBodyCalls() []string      { return f.BodyCalls }
+
+// PackageInfo はパッケージ情報を表す
+type PackageInfo struct {
+	Name     string
+	Path     string
+	File     string
+	Position token.Position
+	Imports  []ImportInfo // このパッケージのimport文
+}
+
+// ImportInfo はimport文の情報を表す
+type ImportInfo struct {
+	Path  string // import path (例: "fmt", "github.com/user/repo/pkg")
+	Alias string // import alias (例: "f" in "import f 'fmt'")
+}

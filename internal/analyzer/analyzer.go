@@ -16,6 +16,7 @@ type AnalysisResult struct {
 	Structs    []StructInfo
 	Interfaces []InterfaceInfo
 	Functions  []FuncInfo
+	Packages   []PackageInfo
 }
 
 // GoAnalyzer はGo言語の静的解析を行う具象実装
@@ -101,6 +102,31 @@ func AnalyzeDir(dir string) (*AnalysisResult, error) {
 func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *AnalysisResult) {
 	pkgName := f.Name.Name
 	structMap := map[string]*StructInfo{}
+
+	// 0th pass: import文の解析
+	imports := []ImportInfo{}
+	for _, imp := range f.Imports {
+		importPath := strings.Trim(imp.Path.Value, `"`)
+		alias := ""
+		if imp.Name != nil {
+			alias = imp.Name.Name
+		}
+		imports = append(imports, ImportInfo{
+			Path:  importPath,
+			Alias: alias,
+		})
+	}
+
+	// パッケージ情報を追加
+	pos := fset.Position(f.Name.Pos())
+	packageInfo := PackageInfo{
+		Name:     pkgName,
+		Path:     "", // TODO: パッケージパスの取得
+		File:     file,
+		Position: pos,
+		Imports:  imports,
+	}
+	result.Packages = append(result.Packages, packageInfo)
 
 	// 1st pass: type宣言（構造体・インターフェース）
 	for _, decl := range f.Decls {
