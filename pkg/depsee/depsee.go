@@ -153,4 +153,11 @@ func (d *Depsee) displayStability(stability *graph.StabilityResult) {
 	for id, s := range stability.NodeStabilities {
 		fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 不安定度=%.2f\n", id, s.OutDegree, s.InDegree, s.Instability)
 	}
+
+	if len(stability.PackageStabilities) > 0 {
+		fmt.Println("[info] パッケージ不安定度:")
+		for pkg, s := range stability.PackageStabilities {
+			fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 不安定度=%.2f\n", pkg, s.OutDegree, s.InDegree, s.Instability)
+		}
+	}
 }

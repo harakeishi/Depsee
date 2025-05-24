@@ -212,3 +212,169 @@ func (e *PackageDependencyExtractor) extractPackageName(importPath string) strin
 	parts := strings.Split(importPath, "/")
 	return parts[len(parts)-1]
 }
+
+// CrossPackageDependencyExtractor はパッケージ間の関数呼び出しや型の使用を抽出
+type CrossPackageDependencyExtractor struct {
+	packageMap map[string]string // import alias -> package name のマッピング
+}
+
+// NewCrossPackageDependencyExtractor は新しいCrossPackageDependencyExtractorを作成
+func NewCrossPackageDependencyExtractor() *CrossPackageDependencyExtractor {
+	return &CrossPackageDependencyExtractor{
+		packageMap: make(map[string]string),
+	}
+}
+
+func (e *CrossPackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
+	logger.Debug("パッケージ間関数呼び出し依存関係抽出開始")
+
+	// パッケージごとのimport情報を構築（同じパッケージの複数ファイルをマージ）
+	packageImports := make(map[string]map[string]string) // package -> (alias -> import_path)
+	for _, pkg := range result.Packages {
+		if packageImports[pkg.Name] == nil {
+			packageImports[pkg.Name] = make(map[string]string)
+		}
+		for _, imp := range pkg.Imports {
+			alias := e.extractPackageAlias(imp.Path, imp.Alias)
+			packageImports[pkg.Name][alias] = imp.Path
+		}
+	}
+
+	// 関数の本体から他パッケージの関数呼び出しを抽出
+	for _, f := range result.Functions {
+		fromID := NodeID(f.Package + "." + f.Name)
+		e.extractCrossPackageCalls(f.BodyCalls, f.Package, packageImports, fromID, g)
+	}
+
+	// メソッドの本体から他パッケージの関数呼び出しを抽出
+	for _, s := range result.Structs {
+		for _, m := range s.Methods {
+			fromID := NodeID(s.Package + "." + m.Name)
+			e.extractCrossPackageCalls(m.BodyCalls, s.Package, packageImports, fromID, g)
+		}
+	}
+}
+
+func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []string, currentPkg string, packageImports map[string]map[string]string, fromID NodeID, g *DependencyGraph) {
+	imports := packageImports[currentPkg]
+	if imports == nil {
+		return
+	}
+
+	for _, call := range bodyCalls {
+		// パッケージ修飾子付きの呼び出しを検出（例：depsee.New, depsee.Config）
+		if strings.Contains(call, ".") {
+			parts := strings.Split(call, ".")
+			if len(parts) >= 2 {
+				pkgAlias := parts[0]
+				funcOrTypeName := parts[1]
+
+				// import情報からパッケージパスを取得
+				if importPath, ok := imports[pkgAlias]; ok {
+					// 同リポジトリ内のパッケージかどうかを判定
+					if e.isLocalPackage(importPath) {
+						targetPkgName := e.extractPackageName(importPath)
+						toID := NodeID(targetPkgName + "." + funcOrTypeName)
+
+						// 依存先ノードが存在する場合のみエッジを追加
+						if _, ok := g.Nodes[toID]; ok {
+							g.AddEdge(fromID, toID)
+							logger.Debug("パッケージ間関数呼び出し依存関係追加", "from", fromID, "to", toID, "call", call)
+						} else {
+							logger.Debug("パッケージ間依存先ノード未発見", "from", fromID, "to", toID, "call", call)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (e *CrossPackageDependencyExtractor) extractPackageAlias(importPath, alias string) string {
+	if alias != "" {
+		return alias // "."や"_"も含めて、指定されたエイリアスをそのまま返す
+	}
+	// エイリアスがない場合はパッケージ名を使用
+	return e.extractPackageName(importPath)
+}
+
+func (e *CrossPackageDependencyExtractor) isLocalPackage(importPath string) bool {
+	// 相対パスは常にローカルパッケージ
+	if strings.HasPrefix(importPath, ".") {
+		return true
+	}
+
+	// 標準ライブラリの判定を改善
+	return !e.isStandardLibrary(importPath)
+}
+
+func (e *CrossPackageDependencyExtractor) isStandardLibrary(importPath string) bool {
+	// 空文字列やドットのみのパスは標準ライブラリではない
+	if importPath == "" || importPath == "." {
+		return false
+	}
+
+	// ドメイン名を含むパッケージ（例：github.com/user/repo）は外部パッケージ
+	if strings.Contains(importPath, ".") {
+		return false
+	}
+
+	// スラッシュを含まない単一パッケージ名は標準ライブラリの可能性が高い
+	if !strings.Contains(importPath, "/") {
+		return e.isKnownStandardLibrary(importPath)
+	}
+
+	// パスの最初の部分が標準ライブラリかチェック
+	parts := strings.Split(importPath, "/")
+	if len(parts) > 0 {
+		return e.isKnownStandardLibrary(parts[0])
+	}
+
+	return false
+}
+
+func (e *CrossPackageDependencyExtractor) isKnownStandardLibrary(pkgName string) bool {
+	// Go標準ライブラリの主要パッケージ
+	// 参考: https://pkg.go.dev/std
+	standardLibs := map[string]bool{
+		// Core packages
+		"builtin": true, "unsafe": true,
+
+		// Common packages
+		"fmt": true, "os": true, "io": true, "time": true, "strings": true, "strconv": true,
+		"context": true, "sync": true, "errors": true, "sort": true, "math": true,
+		"bytes": true, "bufio": true, "path": true, "reflect": true, "regexp": true,
+		"runtime": true, "syscall": true, "testing": true, "unicode": true,
+
+		// Network and HTTP
+		"net": true, "http": true,
+
+		// Encoding and crypto
+		"encoding": true, "crypto": true, "hash": true,
+
+		// Compression and containers
+		"compress": true, "container": true,
+
+		// Development and debugging
+		"debug": true, "expvar": true, "flag": true, "log": true,
+
+		// File and path handling
+		"filepath": true, "mime": true,
+
+		// HTML, image, and text processing
+		"html": true, "image": true, "text": true,
+
+		// Database and indexing
+		"database": true, "index": true,
+
+		// Go toolchain
+		"go": true,
+	}
+
+	return standardLibs[pkgName]
+}
+
+func (e *CrossPackageDependencyExtractor) extractPackageName(importPath string) string {
+	parts := strings.Split(importPath, "/")
+	return parts[len(parts)-1]
+}

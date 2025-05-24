@@ -110,6 +110,14 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Analysis
 		alias := ""
 		if imp.Name != nil {
 			alias = imp.Name.Name
+		} else {
+			// エイリアスが指定されていない場合、importパスから自動的にパッケージ名を抽出
+			parts := strings.Split(importPath, "/")
+			if len(parts) > 0 {
+				alias = parts[len(parts)-1]
+			} else {
+				alias = importPath // フォールバック
+			}
 		}
 		imports = append(imports, ImportInfo{
 			Path:  importPath,
@@ -284,15 +292,34 @@ func extractBodyCalls(body *ast.BlockStmt) []string {
 		return calls
 	}
 	ast.Inspect(body, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		switch fun := call.Fun.(type) {
-		case *ast.Ident:
-			calls = append(calls, fun.Name)
-		case *ast.SelectorExpr:
-			calls = append(calls, fun.Sel.Name)
+		switch node := n.(type) {
+		case *ast.CallExpr:
+			// 関数呼び出し
+			switch fun := node.Fun.(type) {
+			case *ast.Ident:
+				// 同一パッケージ内の関数呼び出し（例：New）
+				calls = append(calls, fun.Name)
+			case *ast.SelectorExpr:
+				// パッケージ修飾子付きの関数呼び出し（例：depsee.New）
+				if ident, ok := fun.X.(*ast.Ident); ok {
+					// パッケージ名.関数名の形式で保存
+					calls = append(calls, ident.Name+"."+fun.Sel.Name)
+				} else {
+					// その他のセレクタ（例：obj.Method()）
+					calls = append(calls, fun.Sel.Name)
+				}
+			}
+		case *ast.CompositeLit:
+			// 構造体リテラル（例：depsee.Config{...}）
+			if selectorExpr, ok := node.Type.(*ast.SelectorExpr); ok {
+				if ident, ok := selectorExpr.X.(*ast.Ident); ok {
+					// パッケージ名.型名の形式で保存
+					calls = append(calls, ident.Name+"."+selectorExpr.Sel.Name)
+				}
+			} else if ident, ok := node.Type.(*ast.Ident); ok {
+				// 同一パッケージ内の型（例：Config{...}）
+				calls = append(calls, ident.Name)
+			}
 		}
 		return true
 	})

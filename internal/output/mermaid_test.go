@@ -257,3 +257,118 @@ func TestGenerateMermaidWithSpecialCharacters(t *testing.T) {
 
 	t.Logf("特殊文字テストの出力:\n%s", result)
 }
+
+func TestGenerateMermaidWithPackageStability(t *testing.T) {
+	// テスト用の依存グラフを作成（パッケージノードを含む）
+	g := graph.NewDependencyGraph()
+
+	// 通常のノードを追加
+	userNode := &graph.Node{
+		ID:      "pkg1.User",
+		Kind:    graph.NodeStruct,
+		Name:    "User",
+		Package: "pkg1",
+	}
+	profileNode := &graph.Node{
+		ID:      "pkg2.Profile",
+		Kind:    graph.NodeStruct,
+		Name:    "Profile",
+		Package: "pkg2",
+	}
+	// パッケージノードを追加（除外されるべき）
+	packageNode := &graph.Node{
+		ID:      "package:pkg1",
+		Kind:    graph.NodePackage,
+		Name:    "pkg1",
+		Package: "pkg1",
+	}
+
+	g.AddNode(userNode)
+	g.AddNode(profileNode)
+	g.AddNode(packageNode)
+
+	// エッジを追加
+	g.AddEdge("pkg1.User", "pkg2.Profile")    // 通常のノード間
+	g.AddEdge("package:pkg1", "pkg2.Profile") // パッケージノードから（除外されるべき）
+
+	// 安定度情報を作成
+	stability := &graph.StabilityResult{
+		NodeStabilities: map[graph.NodeID]*graph.NodeStability{
+			"pkg1.User": {
+				NodeID:      "pkg1.User",
+				OutDegree:   1,
+				InDegree:    0,
+				Instability: 1.0,
+			},
+			"pkg2.Profile": {
+				NodeID:      "pkg2.Profile",
+				OutDegree:   0,
+				InDegree:    1,
+				Instability: 0.0,
+			},
+			"package:pkg1": {
+				NodeID:      "package:pkg1",
+				OutDegree:   1,
+				InDegree:    0,
+				Instability: 1.0,
+			},
+		},
+		PackageStabilities: map[string]*graph.PackageStability{
+			"pkg1": {
+				PackageName: "pkg1",
+				OutDegree:   1,
+				InDegree:    0,
+				Instability: 1.0,
+			},
+			"pkg2": {
+				PackageName: "pkg2",
+				OutDegree:   0,
+				InDegree:    1,
+				Instability: 0.0,
+			},
+		},
+	}
+
+	// Mermaid出力を生成
+	result := GenerateMermaid(g, stability)
+
+	// 結果の検証
+	if !strings.Contains(result, "graph TD") {
+		t.Error("出力にgraph TDが含まれていません")
+	}
+
+	// パッケージの不安定度がサブグラフタイトルに含まれているかチェック
+	if !strings.Contains(result, "pkg1 (不安定度:1.00)") {
+		t.Error("pkg1の不安定度がサブグラフタイトルに表示されていません")
+	}
+
+	if !strings.Contains(result, "pkg2 (不安定度:0.00)") {
+		t.Error("pkg2の不安定度がサブグラフタイトルに表示されていません")
+	}
+
+	// 通常のノードが含まれているかチェック
+	if !strings.Contains(result, "pkg1_User") {
+		t.Error("通常のノードpkg1.Userが含まれていません")
+	}
+
+	if !strings.Contains(result, "pkg2_Profile") {
+		t.Error("通常のノードpkg2.Profileが含まれていません")
+	}
+
+	// パッケージノードが除外されているかチェック
+	if strings.Contains(result, "package_pkg1") {
+		t.Error("パッケージノードが除外されていません")
+	}
+
+	// 通常のノード間のエッジが含まれているかチェック
+	if !strings.Contains(result, "pkg1_User --> pkg2_Profile") {
+		t.Error("通常のノード間のエッジが含まれていません")
+	}
+
+	// パッケージノードからのエッジが除外されているかチェック
+	if strings.Contains(result, "package_pkg1 -->") {
+		t.Error("パッケージノードからのエッジが除外されていません")
+	}
+
+	t.Logf("生成されたMermaid出力:\n%s", result)
+}

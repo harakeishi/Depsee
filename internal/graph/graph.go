@@ -69,6 +69,7 @@ func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 		NewFieldDependencyExtractor(typeResolver),
 		&SignatureDependencyExtractor{},
 		&BodyCallDependencyExtractor{},
+		NewCrossPackageDependencyExtractor(),
 	}
 
 	for _, extractor := range extractors {
@@ -96,7 +97,8 @@ func BuildDependencyGraphWithPackages(result *analyzer.AnalysisResult, targetDir
 		NewFieldDependencyExtractor(typeResolver),
 		&SignatureDependencyExtractor{},
 		&BodyCallDependencyExtractor{},
-		NewPackageDependencyExtractor(targetDir), // パッケージ間依存関係抽出器を追加
+		NewCrossPackageDependencyExtractor(),
+		NewPackageDependencyExtractor(targetDir),
 	}
 
 	for _, extractor := range extractors {
