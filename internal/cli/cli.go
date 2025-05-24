@@ -15,10 +15,11 @@ const version = "v0.1.0"
 
 // Config はCLIの設定を表す
 type Config struct {
-	ShowVersion bool
-	LogLevel    string
-	LogFormat   string
-	TargetDir   string
+	ShowVersion        bool
+	LogLevel           string
+	LogFormat          string
+	TargetDir          string
+	IncludePackageDeps bool
 }
 
 // CLI はCLIアプリケーションを表す
@@ -88,12 +89,14 @@ func (c *CLI) parseFlags(args []string) (*Config, error) {
 	fs.BoolVar(&config.ShowVersion, "version", false, "バージョン情報を表示")
 	fs.StringVar(&config.LogLevel, "log-level", "info", "ログレベル (debug, info, warn, error)")
 	fs.StringVar(&config.LogFormat, "log-format", "text", "ログフォーマット (text, json)")
+	fs.BoolVar(&config.IncludePackageDeps, "include-package-deps", false, "同リポジトリ内のパッケージ間依存関係を解析")
 
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, `depsee: Goコード依存可視化ツール
 
-Usage: depsee analyze <target_dir>
+Usage: depsee [options] analyze <target_dir>
 
+Options:
 `)
 		fs.PrintDefaults()
 	}
@@ -135,7 +138,14 @@ func (c *CLI) execute(config *Config) error {
 	c.displayResults(result)
 
 	// 依存グラフ構築
-	dependencyGraph := c.grapher.BuildDependencyGraph(result)
+	var dependencyGraph *graph.DependencyGraph
+	if config.IncludePackageDeps {
+		c.logger.Info("パッケージ間依存関係を含む依存グラフ構築", "include_package_deps", config.IncludePackageDeps)
+		dependencyGraph = c.grapher.BuildDependencyGraphWithPackages(result, config.TargetDir)
+	} else {
+		c.logger.Info("通常の依存グラフ構築", "include_package_deps", config.IncludePackageDeps)
+		dependencyGraph = c.grapher.BuildDependencyGraph(result)
+	}
 	c.displayGraph(dependencyGraph)
 
 	// 不安定度算出
@@ -168,6 +178,20 @@ func (c *CLI) displayResults(result *analyzer.AnalysisResult) {
 	fmt.Println("[info] 関数一覧:")
 	for _, f := range result.Functions {
 		fmt.Printf("  - %s (package: %s, file: %s)\n", f.Name, f.Package, f.File)
+	}
+
+	if len(result.Packages) > 0 {
+		fmt.Println("[info] パッケージ一覧:")
+		for _, p := range result.Packages {
+			fmt.Printf("  - %s (file: %s)\n", p.Name, p.File)
+			for _, imp := range p.Imports {
+				alias := ""
+				if imp.Alias != "" {
+					alias = " as " + imp.Alias
+				}
+				fmt.Printf("      * import: %s%s\n", imp.Path, alias)
+			}
+		}
 	}
 }
 

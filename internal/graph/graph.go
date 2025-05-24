@@ -11,6 +11,7 @@ const (
 	NodeStruct NodeKind = iota
 	NodeInterface
 	NodeFunc
+	NodePackage
 )
 
 type NodeID string // 例: "package.StructName"
@@ -75,6 +76,34 @@ func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 	}
 
 	logger.Info("依存グラフ構築完了", "nodes", len(g.Nodes), "edges", countEdges(g))
+	return g
+}
+
+// BuildDependencyGraphWithPackages: パッケージ間依存関係を含む依存グラフを構築
+func BuildDependencyGraphWithPackages(result *analyzer.AnalysisResult, targetDir string) *DependencyGraph {
+	logger.Info("パッケージ間依存関係を含む依存グラフ構築開始")
+
+	g := NewDependencyGraph()
+
+	// ノード登録
+	registerNodes(result, g)
+
+	// 型解析器の初期化
+	typeResolver := analyzer.NewTypeResolver()
+
+	// 依存関係抽出（戦略パターンを使用）
+	extractors := []DependencyExtractor{
+		NewFieldDependencyExtractor(typeResolver),
+		&SignatureDependencyExtractor{},
+		&BodyCallDependencyExtractor{},
+		NewPackageDependencyExtractor(targetDir), // パッケージ間依存関係抽出器を追加
+	}
+
+	for _, extractor := range extractors {
+		extractor.Extract(result, g)
+	}
+
+	logger.Info("パッケージ間依存関係を含む依存グラフ構築完了", "nodes", len(g.Nodes), "edges", countEdges(g))
 	return g
 }
 

@@ -6,6 +6,7 @@ Goコードの構造体・関数・インターフェースの依存関係を可
 
 - 🔍 **静的解析**: Goコードを解析して構造体・関数・インターフェースを抽出
 - 📊 **依存関係可視化**: 要素間の依存関係をグラフ構造で表現
+- 📦 **パッケージ間依存関係**: 同リポジトリ内のパッケージ間依存関係を解析（オプション）
 - 📈 **不安定度計算**: SOLID原則に基づく不安定度指標の算出
 - 🎨 **Mermaid出力**: 相関図をMermaid記法で生成
 - 🛠️ **高品質設計**: SOLIDの原則に準拠した拡張可能なアーキテクチャ
@@ -24,6 +25,9 @@ go install github.com/harakeishi/depsee/cmd/depsee@latest
 # プロジェクトの解析
 depsee analyze ./path/to/your/project
 
+# パッケージ間依存関係を含む解析
+depsee --include-package-deps analyze ./path/to/your/project
+
 # バージョン表示
 depsee -version
 
@@ -33,6 +37,20 @@ depsee -log-level debug analyze ./path/to/project
 # JSONログフォーマットで実行
 depsee -log-format json analyze ./path/to/project
 ```
+
+### パッケージ間依存関係解析
+
+`--include-package-deps` オプションを使用すると、同リポジトリ内のパッケージ間の依存関係も解析できます：
+
+```bash
+# パッケージ間依存関係を含む解析
+depsee --include-package-deps analyze ./multi-package-project
+```
+
+この機能により、以下が追加で解析されます：
+- パッケージノード（`package:パッケージ名`）
+- パッケージ間の依存関係（import文に基づく）
+- 標準ライブラリは除外され、同リポジトリ内のパッケージのみが対象
 
 ### 出力例
 
