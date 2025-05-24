@@ -8,22 +8,24 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/harakeishi/Depsee)](https://github.com/harakeishi/Depsee/releases/latest)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fharakeishi%2Fdepsee-blue)](https://github.com/harakeishi/Depsee/pkgs/container/depsee)
 
-Goコードの構造体・関数・インターフェースの依存関係を可視化し、不安定度（変更容易度）をMermaid記法で出力するCLIツール
+**English | [日本語](README.ja.md)**
 
-## 特徴
+A CLI tool that visualizes dependencies between structs, functions, and interfaces in Go code and outputs instability metrics (ease of change) in Mermaid notation.
 
-- 🔍 **静的解析**: Goコードを解析して構造体・関数・インターフェースを抽出
-- 📊 **依存関係可視化**: 要素間の依存関係をグラフ構造で表現
-- 📦 **パッケージ間依存関係**: 同リポジトリ内のパッケージ間依存関係を解析（オプション）
-- 🎯 **パッケージフィルタリング**: 指定されたパッケージのみを解析対象とする機能
-- 🚫 **除外機能**: 指定されたパッケージやディレクトリを解析対象から除外する機能
-- 📈 **不安定度計算**: SOLID原則に基づく不安定度指標の算出
-- 🎨 **Mermaid出力**: 相関図をMermaid記法で生成
-- 🛠️ **高品質設計**: SOLIDの原則に準拠した拡張可能なアーキテクチャ
+## Features
 
-## インストール
+- 🔍 **Static Analysis**: Analyzes Go code to extract structs, functions, and interfaces
+- 📊 **Dependency Visualization**: Represents dependencies between elements in graph structure
+- 📦 **Inter-package Dependencies**: Analyzes dependencies between packages within the same repository (optional)
+- 🎯 **Package Filtering**: Functionality to analyze only specified packages
+- 🚫 **Exclusion Features**: Functionality to exclude specified packages or directories from analysis
+- 📈 **Instability Calculation**: Calculates instability metrics based on SOLID principles
+- 🎨 **Mermaid Output**: Generates correlation diagrams in Mermaid notation
+- 🛠️ **High-Quality Design**: Extensible architecture adhering to SOLID principles
 
-### Go (推奨)
+## Installation
+
+### Go (Recommended)
 
 ```bash
 go install github.com/harakeishi/depsee@latest
@@ -32,23 +34,23 @@ go install github.com/harakeishi/depsee@latest
 ### Docker
 
 ```bash
-# 最新版を使用
+# Use latest version
 docker pull ghcr.io/harakeishi/depsee:latest
 
-# 特定バージョンを使用
+# Use specific version
 docker pull ghcr.io/harakeishi/depsee:v1.0.0
 ```
 
-### バイナリダウンロード
+### Binary Download
 
-[GitHub Releases](https://github.com/harakeishi/Depsee/releases/latest)から、お使いのプラットフォーム向けのバイナリをダウンロードできます：
+You can download binaries for your platform from [GitHub Releases](https://github.com/harakeishi/Depsee/releases/latest):
 
 - **Linux**: `depsee_Linux_x86_64.tar.gz`
 - **macOS (Intel)**: `depsee_Darwin_x86_64.tar.gz`
 - **macOS (Apple Silicon)**: `depsee_Darwin_arm64.tar.gz`
 - **Windows**: `depsee_Windows_x86_64.zip`
 
-### ソースからビルド
+### Build from Source
 
 ```bash
 git clone https://github.com/harakeishi/Depsee.git
@@ -56,125 +58,125 @@ cd Depsee
 go build -o depsee .
 ```
 
-## 使用方法
+## Usage
 
-### 基本的な使用例
+### Basic Usage Examples
 
 ```bash
-# プロジェクトの解析
+# Analyze project
 depsee analyze ./path/to/your/project
 
-# パッケージ間依存関係を含む解析
+# Analysis including inter-package dependencies
 depsee --include-package-deps analyze ./path/to/your/project
 
-# 特定のパッケージのみを解析
+# Analyze only specific packages
 depsee analyze --target-packages main ./path/to/your/project
 
-# 複数のパッケージを解析
+# Analyze multiple packages
 depsee analyze --target-packages main,cmd,pkg ./path/to/your/project
 
-# 特定のパッケージを除外
+# Exclude specific packages
 depsee analyze --exclude-packages test,mock ./path/to/your/project
 
-# 特定のディレクトリを除外
+# Exclude specific directories
 depsee analyze --exclude-dirs testdata,vendor ./path/to/your/project
 
-# バージョン表示
+# Show version
 depsee -version
 
-# デバッグログ付きで実行
+# Run with debug logging
 depsee -log-level debug analyze ./path/to/project
 
-# JSONログフォーマットで実行
+# Run with JSON log format
 depsee -log-format json analyze ./path/to/project
 ```
 
-### パッケージフィルタリング
+### Package Filtering
 
-`--target-packages` オプションを使用すると、指定されたパッケージのみを解析対象とできます：
+Using the `--target-packages` option, you can analyze only specified packages:
 
 ```bash
-# mainパッケージのみを解析
+# Analyze only main package
 depsee analyze --target-packages main ./your-project
 
-# mainとcmdパッケージのみを解析
+# Analyze main and cmd packages only
 depsee analyze --target-packages main,cmd ./your-project
 
-# 複数パッケージの解析（スペースを含む場合はクォートで囲む）
+# Analyze multiple packages (quote if containing spaces)
 depsee analyze --target-packages "main, cmd, internal/service" ./your-project
 ```
 
-この機能により、以下のメリットがあります：
-- **大規模プロジェクトでの効率的な解析**: 関心のあるパッケージのみに焦点を当てることができます
-- **段階的な解析**: パッケージごとに依存関係を段階的に確認できます
-- **パフォーマンス向上**: 解析対象を絞ることで処理時間を短縮できます
+This feature provides the following benefits:
+- **Efficient analysis for large projects**: Focus on packages of interest
+- **Incremental analysis**: Check dependencies incrementally by package
+- **Performance improvement**: Reduce processing time by narrowing analysis scope
 
-### 除外機能
+### Exclusion Features
 
-`--exclude-packages` と `--exclude-dirs` オプションを使用すると、指定されたパッケージやディレクトリを解析対象から除外できます：
+Using `--exclude-packages` and `--exclude-dirs` options, you can exclude specified packages or directories from analysis:
 
 ```bash
-# testパッケージを除外
+# Exclude test packages
 depsee analyze --exclude-packages test ./your-project
 
-# 複数のパッケージを除外
+# Exclude multiple packages
 depsee analyze --exclude-packages test,mock,vendor ./your-project
 
-# testdataディレクトリを除外
+# Exclude testdata directory
 depsee analyze --exclude-dirs testdata ./your-project
 
-# 複数のディレクトリを除外
+# Exclude multiple directories
 depsee analyze --exclude-dirs testdata,vendor,third_party ./your-project
 
-# パッケージとディレクトリの両方を除外
+# Exclude both packages and directories
 depsee analyze --exclude-packages test --exclude-dirs vendor ./your-project
 
-# フィルタリングと除外を組み合わせ
+# Combine filtering and exclusion
 depsee analyze --target-packages main,cmd --exclude-packages test --exclude-dirs testdata ./your-project
 ```
 
-この機能により、以下のメリットがあります：
-- **不要なコードの除外**: テストコードやベンダーコードなど、解析に不要な部分を除外できます
-- **効率的な解析**: 除外により処理時間を短縮し、関心のある部分に集中できます
-- **柔軟な設定**: パッケージレベルとディレクトリレベルの両方で除外設定が可能です
-- **組み合わせ可能**: target-packagesと組み合わせて、より細かい制御が可能です
+This feature provides the following benefits:
+- **Exclude unnecessary code**: Remove test code, vendor code, and other parts not needed for analysis
+- **Efficient analysis**: Reduce processing time and focus on relevant parts through exclusion
+- **Flexible configuration**: Exclusion settings available at both package and directory levels
+- **Combinable**: Can be combined with target-packages for finer control
 
-### パッケージ間依存関係解析
+### Inter-package Dependency Analysis
 
-`--include-package-deps` オプションを使用すると、同リポジトリ内のパッケージ間の依存関係も解析できます：
+Using the `--include-package-deps` option, you can also analyze dependencies between packages within the same repository:
 
 ```bash
-# パッケージ間依存関係を含む解析
+# Analysis including inter-package dependencies
 depsee --include-package-deps analyze ./multi-package-project
 
-# パッケージフィルタリングと組み合わせて使用
+# Use with package filtering
 depsee analyze --target-packages main,cmd --include-package-deps ./multi-package-project
 ```
 
-この機能により、以下が追加で解析されます：
-- パッケージノード（`package:パッケージ名`）
-- パッケージ間の依存関係（import文に基づく）
-- 標準ライブラリは除外され、同リポジトリ内のパッケージのみが対象
+This feature additionally analyzes:
+- Package nodes (`package:package_name`)
+- Dependencies between packages (based on import statements)
+- Standard library is excluded, only packages within the same repository are targeted
 
-### 出力例
+### Output Example
 
 ```
-[info] 構造体一覧:
+[info] Struct list:
   - User (package: sample, file: testdata/sample/user.go)
-      * メソッド: UpdateProfile
-      * メソッド: AddPost
+      * Method: UpdateProfile
+      * Method: AddPost
   - Profile (package: sample, file: testdata/sample/user.go)
   - Post (package: sample, file: testdata/sample/user.go)
   - UserSettings (package: sample, file: testdata/sample/user.go)
 
-[info] インターフェース一覧:
+[info] Interface list:
   - UserService (package: sample, file: testdata/sample/user.go)
 
-[info] 関数一覧:
+[info] Function list:
   - CreateUser (package: sample, file: testdata/sample/user.go)
   - GetUserPosts (package: sample, file: testdata/sample/user.go)
 
-[info] 依存グラフ ノード:
+[info] Dependency graph nodes:
   - sample.User (User)
   - sample.Profile (Profile)
   - sample.Post (Post)
@@ -183,21 +185,22 @@ depsee analyze --target-packages main,cmd --include-package-deps ./multi-package
   - sample.CreateUser (CreateUser)
   - sample.GetUserPosts (GetUserPosts)
 
-[info] ノード不安定度:
-  sample.User: 依存数=3, 非依存数=3, 不安定度=0.50
-  sample.Post: 依存数=1, 非依存数=2, 不安定度=0.33
-  sample.UserService: 依存数=0, 非依存数=0, 不安定度=1.00
-  sample.CreateUser: 依存数=1, 非依存数=0, 不安定度=1.00
+[info] Node instability:
+  sample.User: dependencies=3, dependents=3, instability=0.50
+  sample.Post: dependencies=1, dependents=2, instability=0.33
+  sample.UserService: dependencies=0, dependents=0, instability=1.00
+  sample.CreateUser: dependencies=1, dependents=0, instability=1.00
 
-[info] Mermaid相関図:
+[info] Mermaid correlation diagram:
 graph TD
-    sample.UserService["UserService<br>不安定度:1.00"]
-    sample.CreateUser["CreateUser<br>不安定度:1.00"]
-    sample.GetUserPosts["GetUserPosts<br>不安定度:1.00"]
-    sample.User["User<br>不安定度:0.50"]
-    sample.Post["Post<br>不安定度:0.33"]
-    sample.Profile["Profile<br>不安定度:0.00"]
-    sample.UserSettings["UserSettings<br>不安定度:0.00"]
+    sample.UserService["UserService<br>Instability:1.00"]
+    sample.CreateUser["CreateUser<br>Instability:1.00"]
+    sample.GetUserPosts["GetUserPosts<br>Instability:1.00"]
+    sample.User["User<br>Instability:0.50"]
+    sample.Post["Post<br>Instability:0.33"]
+    sample.Profile["Profile<br>Instability:0.00"]
+    sample.UserSettings["UserSettings<br>Instability:0.00"]
+
     sample.User --> sample.Profile
     sample.User --> sample.Post
     sample.User --> sample.UserSettings
@@ -207,197 +210,143 @@ graph TD
     sample.GetUserPosts --> sample.Post
 ```
 
-## ディレクトリ構成
+### Demo
+
+![Demo](./result1.png)
+
+### SDP Violation Detection
+
+The tool can also detect violations of the Stable Dependencies Principle (SDP), where stable components depend on unstable ones:
+
+![SDP Violation](./sdp_vio.png)
+
+## Directory Structure
 
 ```
 depsee/
-├── cmd/depsee/           # CLIエントリポイント
+├── cmd/depsee/           # CLI entry point
 ├── internal/
-│   ├── analyzer/         # 静的解析ロジック
-│   ├── cli/              # CLIロジック
-│   ├── errors/           # エラーハンドリング
-│   ├── graph/            # 依存グラフ・安定度算出
-│   ├── logger/           # ログ機能
-│   └── output/           # Mermaid出力
-├── testdata/sample/      # サンプルGoコード・テスト用
-└── docs/                 # 設計ドキュメント
+│   ├── analyzer/         # Static analysis logic
+│   ├── cli/              # CLI logic
+│   ├── errors/           # Error handling
+│   ├── graph/            # Dependency graph & stability calculation
+│   ├── logger/           # Logging functionality
+│   └── output/           # Mermaid output
+├── testdata/sample/      # Sample Go code for testing
+└── docs/                 # Design documentation
 ```
 
-## 開発
+## Development
 
-### ビルド
+### Build
 
 ```bash
 go build -o depsee cmd/depsee/main.go
 ```
 
-### テスト
+### Test
 
 ```bash
 go test ./...
 ```
 
-### 開発用実行
+### Development Run
 
 ```bash
 go run cmd/depsee/main.go analyze ./testdata/sample
 ```
 
-## CI/CD & デプロイメント
+## CI/CD & Deployment
 
-このプロジェクトは完全自動化されたCI/CDパイプラインを採用しており、コードの品質管理から自動リリースまでを自動化しています。
+This project adopts a fully automated CI/CD pipeline, automating everything from code quality management to automatic releases.
 
-### 🔄 継続的インテグレーション (CI)
+### 🔄 Continuous Integration (CI)
 
-**トリガー**: `main`、`develop`ブランチへのプッシュ、および`main`ブランチへのプルリクエスト
+**Triggers**: Pushes to `main` and `develop` branches, and pull requests to `main` branch
 
-**実行内容**:
-- **マルチバージョンテスト**: Go 1.21、1.22、1.23での動作確認
-- **テスト実行**: レースコンディション検出付きテスト
-- **カバレッジ測定**: Codecovへの自動アップロード
-- **マルチプラットフォームビルド**: Linux、macOS、Windows向けバイナリ生成
+**Execution Content**:
+- **Multi-version Testing**: Verification with Go 1.21, 1.22, 1.23
+- **Test Execution**: Tests with race condition detection
+- **Coverage Measurement**: Automatic upload to Codecov
+- **Multi-platform Build**: Binary generation for Linux, macOS, Windows
 
 ```yaml
-# .github/workflows/ci.yml で定義
+# Defined in .github/workflows/ci.yml
 - Linux (amd64)
 - macOS (amd64, arm64)  
 - Windows (amd64)
 ```
 
-### 🚀 自動リリース
+### 🚀 Automatic Release
 
-**トリガー**: `main`ブランチへのプッシュ（特定のコミットタイプを除く）
+**Trigger**: Pushes to `main` branch (excluding specific commit types)
 
-**自動バージョニング**:
-- **Major版** (`v1.0.0 → v2.0.0`): `feat!:`で始まるコミットまたは`BREAKING CHANGE`を含むコミット
-- **Minor版** (`v1.0.0 → v1.1.0`): `feat:`で始まるコミット
-- **Patch版** (`v1.0.0 → v1.0.1`): その他のコミット（`fix:`、`refactor:`など）
+**Automatic Versioning**:
+- **Major version** (`v1.0.0 → v2.0.0`): Commits starting with `feat!:` or containing `BREAKING CHANGE`
+- **Minor version** (`v1.0.0 → v1.1.0`): Commits starting with `feat:`
+- **Patch version** (`v1.0.0 → v1.0.1`): Other commits (`fix:`, `refactor:`, etc.)
 
-**除外されるコミット**:
-- `chore:`で始まるコミット
-- `docs:`で始まるコミット
-- `ci:`で始まるコミット
-- `[skip release]`または`[skip ci]`を含むコミット
+**Excluded Commits**:
+- Commits starting with `chore:`
+- Commits starting with `docs:`
+- Commits starting with `ci:`
+- Commits containing `[skip release]` or `[skip ci]`
 
-**自動実行される処理**:
-1. 最新タグから次のバージョンを自動計算
-2. `cmd/root.go`のバージョン変数を自動更新
-3. バージョン更新をコミット・プッシュ
-4. 新しいタグを作成・プッシュ
-5. Go Releaserによるリリース作成
+**Automatically Executed Processes**:
+1. Automatically calculate next version from latest tag
+2. Automatically update version variable in `cmd/root.go`
+3. Commit and push version update
+4. Create and push new tag
+5. Create release with Go Releaser
 
-### 📦 リリース成果物
+### 📦 Release Artifacts
 
-**バイナリ**:
+**Binaries**:
 - `depsee_Linux_x86_64.tar.gz`
 - `depsee_Darwin_x86_64.tar.gz`
 - `depsee_Darwin_arm64.tar.gz`
 - `depsee_Windows_x86_64.zip`
 
-**コンテナイメージ**:
+**Container Images**:
 - `ghcr.io/harakeishi/depsee:latest`
 - `ghcr.io/harakeishi/depsee:v{version}`
 
-**パッケージマネージャー**:
+**Package Managers**:
 - **Go**: `go install github.com/harakeishi/depsee@latest`
 
-**その他**:
-- チェックサムファイル (`checksums.txt`)
-- 自動生成されたリリースノート
-- CHANGELOGの自動更新
+**Others**:
+- Checksum file (`checksums.txt`)
+- Auto-generated release notes
+- Automatic CHANGELOG updates
 
-### 🐳 Docker利用
+### 🐳 Docker Usage
 
 ```bash
-# 最新版を実行
+# Run latest version
 docker run --rm -v $(pwd):/workspace ghcr.io/harakeishi/depsee:latest analyze /workspace
 
-# 特定バージョンを実行
+# Run specific version
 docker run --rm -v $(pwd):/workspace ghcr.io/harakeishi/depsee:v1.0.0 analyze /workspace
 ```
 
-### 🔧 手動リリース
+### 🔧 Manual Release
 
-自動リリースに加えて、手動でのリリースも可能です：
+In addition to automatic releases, manual releases are also possible:
 
 ```bash
-# 手動でタグを作成してリリース
+# Manually create tag and release
 git tag v1.2.3
 git push origin v1.2.3
 ```
 
-### 📋 リリース例
+### 📋 Release Examples
 
-**パッチリリース**:
+**Patch Release**:
 ```bash
-git commit -m "fix: バグを修正"
+git commit -m "fix: fix bug"
 git push origin main
-# → v1.0.0 → v1.0.1 に自動リリース
+# → Automatically releases v1.0.0 → v1.0.1
 ```
 
-**マイナーリリース**:
-```bash
-git commit -m "feat: 新機能を追加"
-git push origin main
-# → v1.0.0 → v1.1.0 に自動リリース
+**Minor Release**:
 ```
-
-**メジャーリリース**:
-```bash
-git commit -m "feat!: 破壊的変更を含む新機能"
-git push origin main
-# → v1.0.0 → v2.0.0 に自動リリース
-```
-
-**リリースをスキップ**:
-```bash
-git commit -m "docs: READMEを更新 [skip release]"
-git push origin main
-# → リリースされない
-```
-
-### 🔍 品質保証
-
-**テスト戦略**:
-- ユニットテスト
-- レースコンディション検出
-- カバレッジ測定とレポート
-
-**セキュリティ**:
-- GitHub Container Registryへの安全な認証
-- 最小権限の原則に基づくワークフロー権限設定
-- Dockerイメージの脆弱性スキャン
-
-### 📊 監視とメトリクス
-
-- **ビルド状況**: GitHub Actionsのステータスバッジ
-- **コードカバレッジ**: Codecovによる可視化
-- **リリース履歴**: GitHub Releasesページで確認可能
-- **ダウンロード統計**: GitHub Releasesの統計情報
-
-## アーキテクチャ
-
-このプロジェクトはSOLIDの原則に基づいて設計されており、以下の特徴があります：
-
-- **単一責任の原則**: 各パッケージが明確な責任を持つ
-- **依存関係逆転の原則**: インターフェースを通じた疎結合
-- **戦略パターン**: 依存関係抽出ロジックの柔軟な拡張
-- **依存性注入**: 高いテスタビリティ
-
-## ドキュメント
-
-詳細な設計・仕様については `docs/` ディレクトリの設計ドキュメントを参照してください：
-
-- [全体設計](docs/design.md)
-- [要件定義](docs/requirements.md)
-- [静的解析設計](docs/design_static_analysis.md)
-- [依存関係解析設計](docs/design_dependency_analysis.md)
-- [不安定度解析設計](docs/design_stability_analysis.md)
-- [Mermaid出力設計](docs/design_mermaid_output.md)
-- [CLI機能設計](docs/design_cli.md)
-- [ログ機能設計](docs/design_logging.md)
-- [エラーハンドリング設計](docs/design_error_handling.md)
-
-## ライセンス
-
-このプロジェクトはMITライセンスの下で公開されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
