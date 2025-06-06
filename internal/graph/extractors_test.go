@@ -166,6 +166,84 @@ func TestCrossPackageDependencyExtractor_extractPackageAlias(t *testing.T) {
 	}
 }
 
+func TestCrossPackageTypeDependencies(t *testing.T) {
+	result := &analyzer.AnalysisResult{
+		Structs: []analyzer.StructInfo{
+			{
+				Name:    "A",
+				Package: "pkg1",
+				Fields:  []analyzer.FieldInfo{{Name: "T", Type: "pkg2.Type"}},
+			},
+			{
+				Name:    "Type",
+				Package: "pkg2",
+			},
+		},
+		Functions: []analyzer.FuncInfo{
+			{
+				Name:    "Create",
+				Package: "pkg1",
+				Results: []analyzer.FieldInfo{{Type: "*pkg2.Type"}},
+			},
+		},
+		Packages: []analyzer.PackageInfo{
+			{Name: "pkg1", File: "pkg1/a.go"},
+			{Name: "pkg2", File: "pkg2/b.go"},
+		},
+	}
+
+	g := BuildDependencyGraph(result)
+
+	if _, ok := g.Edges["pkg1.A"]["pkg2.Type"]; !ok {
+		t.Error("Expected edge from pkg1.A to pkg2.Type not found")
+	}
+
+	if _, ok := g.Edges["pkg1.Create"]["pkg2.Type"]; !ok {
+		t.Error("Expected edge from pkg1.Create to pkg2.Type not found")
+	}
+}
+
+func TestCrossPackageTypeDependenciesWithAlias(t *testing.T) {
+	result := &analyzer.AnalysisResult{
+		Structs: []analyzer.StructInfo{
+			{
+				Name:    "A",
+				Package: "pkg1",
+				Fields:  []analyzer.FieldInfo{{Name: "T", Type: "alias.Type"}},
+			},
+			{
+				Name:    "Type",
+				Package: "pkg2",
+			},
+		},
+		Functions: []analyzer.FuncInfo{
+			{
+				Name:    "Create",
+				Package: "pkg1",
+				Results: []analyzer.FieldInfo{{Type: "*alias.Type"}},
+			},
+		},
+		Packages: []analyzer.PackageInfo{
+			{
+				Name:    "pkg1",
+				File:    "pkg1/a.go",
+				Imports: []analyzer.ImportInfo{{Path: "example.com/pkg2", Alias: "alias"}},
+			},
+			{Name: "pkg2", File: "pkg2/b.go"},
+		},
+	}
+
+	g := BuildDependencyGraph(result)
+
+	if _, ok := g.Edges["pkg1.A"]["pkg2.Type"]; !ok {
+		t.Error("Expected edge from pkg1.A to pkg2.Type not found")
+	}
+
+	if _, ok := g.Edges["pkg1.Create"]["pkg2.Type"]; !ok {
+		t.Error("Expected edge from pkg1.Create to pkg2.Type not found")
+	}
+}
+
 // 共通ユーティリティ関数のテストは utils パッケージで実行されるため、
 // ここでは簡単な統合テストのみを行う
 func TestUtilsIntegration(t *testing.T) {
