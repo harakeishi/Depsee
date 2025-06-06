@@ -15,13 +15,15 @@ type DependencyExtractor interface {
 
 // FieldDependencyExtractor は構造体フィールドの依存関係を抽出
 type FieldDependencyExtractor struct {
-	typeResolver *analyzer.TypeResolver
+	typeResolver   *analyzer.TypeResolver
+	packageAliases map[string]map[string]string // pkg -> alias -> pkgName
 }
 
 // NewFieldDependencyExtractor は新しいFieldDependencyExtractorを作成
-func NewFieldDependencyExtractor(typeResolver *analyzer.TypeResolver) *FieldDependencyExtractor {
+func NewFieldDependencyExtractor(typeResolver *analyzer.TypeResolver, aliases map[string]map[string]string) *FieldDependencyExtractor {
 	return &FieldDependencyExtractor{
-		typeResolver: typeResolver,
+		typeResolver:   typeResolver,
+		packageAliases: aliases,
 	}
 }
 
@@ -51,11 +53,29 @@ func (e *FieldDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeI
 	if cleaned == "" || strings.Contains(cleaned, "map[") {
 		return ""
 	}
+	if strings.Contains(cleaned, ".") {
+		parts := strings.SplitN(cleaned, ".", 2)
+		alias := parts[0]
+		typeName := parts[1]
+		pkgName := alias
+		if m, ok := e.packageAliases[pkg]; ok {
+			if actual, ok := m[alias]; ok {
+				pkgName = actual
+			}
+		}
+		return NodeID(pkgName + "." + typeName)
+	}
 	return NodeID(pkg + "." + cleaned)
 }
 
 // SignatureDependencyExtractor は関数シグネチャの依存関係を抽出
-type SignatureDependencyExtractor struct{}
+type SignatureDependencyExtractor struct {
+	packageAliases map[string]map[string]string // pkg -> alias -> pkgName
+}
+
+func NewSignatureDependencyExtractor(aliases map[string]map[string]string) *SignatureDependencyExtractor {
+	return &SignatureDependencyExtractor{packageAliases: aliases}
+}
 
 func (e *SignatureDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
 	// 関数の引数・戻り値の依存関係抽出
@@ -89,6 +109,18 @@ func (e *SignatureDependencyExtractor) parseTypeToNodeID(typeName, pkg string) N
 	cleaned := strings.TrimLeft(typeName, "*[]")
 	if cleaned == "" || strings.Contains(cleaned, "map[") {
 		return ""
+	}
+	if strings.Contains(cleaned, ".") {
+		parts := strings.SplitN(cleaned, ".", 2)
+		alias := parts[0]
+		typeName := parts[1]
+		pkgName := alias
+		if m, ok := e.packageAliases[pkg]; ok {
+			if actual, ok := m[alias]; ok {
+				pkgName = actual
+			}
+		}
+		return NodeID(pkgName + "." + typeName)
 	}
 	return NodeID(pkg + "." + cleaned)
 }
@@ -256,4 +288,22 @@ func (e *CrossPackageDependencyExtractor) extractPackageAlias(importPath, alias 
 	}
 	// エイリアスがない場合はパッケージ名を使用
 	return utils.ExtractPackageName(importPath)
+}
+
+// buildAliasMap creates a mapping of package -> (alias -> package name)
+func buildAliasMap(result *analyzer.AnalysisResult) map[string]map[string]string {
+	m := make(map[string]map[string]string)
+	for _, pkg := range result.Packages {
+		if m[pkg.Name] == nil {
+			m[pkg.Name] = make(map[string]string)
+		}
+		for _, imp := range pkg.Imports {
+			alias := imp.Alias
+			if alias == "" {
+				alias = utils.ExtractPackageName(imp.Path)
+			}
+			m[pkg.Name][alias] = utils.ExtractPackageName(imp.Path)
+		}
+	}
+	return m
 }

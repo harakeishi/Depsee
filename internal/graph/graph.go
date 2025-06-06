@@ -64,10 +64,12 @@ func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 	// 型解析器の初期化
 	typeResolver := analyzer.NewTypeResolver()
 
+	aliasMap := buildAliasMap(result)
+
 	// 依存関係抽出（戦略パターンを使用）
 	extractors := []DependencyExtractor{
-		NewFieldDependencyExtractor(typeResolver),
-		&SignatureDependencyExtractor{},
+		NewFieldDependencyExtractor(typeResolver, aliasMap),
+		NewSignatureDependencyExtractor(aliasMap),
 		&BodyCallDependencyExtractor{},
 		NewCrossPackageDependencyExtractor(),
 	}
@@ -92,10 +94,12 @@ func BuildDependencyGraphWithPackages(result *analyzer.AnalysisResult, targetDir
 	// 型解析器の初期化
 	typeResolver := analyzer.NewTypeResolver()
 
+	aliasMap := buildAliasMap(result)
+
 	// 依存関係抽出（戦略パターンを使用）
 	extractors := []DependencyExtractor{
-		NewFieldDependencyExtractor(typeResolver),
-		&SignatureDependencyExtractor{},
+		NewFieldDependencyExtractor(typeResolver, aliasMap),
+		NewSignatureDependencyExtractor(aliasMap),
 		&BodyCallDependencyExtractor{},
 		NewCrossPackageDependencyExtractor(),
 		NewPackageDependencyExtractor(targetDir),
