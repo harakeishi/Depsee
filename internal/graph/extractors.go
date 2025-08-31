@@ -10,7 +10,7 @@ import (
 
 // DependencyExtractor は依存関係抽出の戦略インターフェース
 type DependencyExtractor interface {
-	Extract(result *analyzer.AnalysisResult, g *DependencyGraph)
+	Extract(result *analyzer.Result, g *DependencyGraph)
 }
 
 // FieldDependencyExtractor は構造体フィールドの依存関係を抽出
@@ -25,7 +25,7 @@ func NewFieldDependencyExtractor(typeResolver *analyzer.TypeResolver) *FieldDepe
 	}
 }
 
-func (e *FieldDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
+func (e *FieldDependencyExtractor) Extract(result *analyzer.Result, g *DependencyGraph) {
 	logger.Debug("フィールド依存関係抽出開始")
 
 	for _, s := range result.Structs {
@@ -57,7 +57,7 @@ func (e *FieldDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeI
 // SignatureDependencyExtractor は関数シグネチャの依存関係を抽出
 type SignatureDependencyExtractor struct{}
 
-func (e *SignatureDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
+func (e *SignatureDependencyExtractor) Extract(result *analyzer.Result, g *DependencyGraph) {
 	// 関数の引数・戻り値の依存関係抽出
 	for _, f := range result.Functions {
 		fromID := NodeID(f.Package + "." + f.Name)
@@ -96,7 +96,7 @@ func (e *SignatureDependencyExtractor) parseTypeToNodeID(typeName, pkg string) N
 // BodyCallDependencyExtractor は関数本体の呼び出し依存関係を抽出
 type BodyCallDependencyExtractor struct{}
 
-func (e *BodyCallDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
+func (e *BodyCallDependencyExtractor) Extract(result *analyzer.Result, g *DependencyGraph) {
 	// 関数本体の依存関係抽出
 	for _, f := range result.Functions {
 		fromID := NodeID(f.Package + "." + f.Name)
@@ -134,7 +134,7 @@ func NewPackageDependencyExtractor(targetDir string) *PackageDependencyExtractor
 	}
 }
 
-func (e *PackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
+func (e *PackageDependencyExtractor) Extract(result *analyzer.Result, g *DependencyGraph) {
 	logger.Debug("パッケージ間依存関係抽出開始")
 
 	// パッケージノードを追加
@@ -185,7 +185,7 @@ func NewCrossPackageDependencyExtractor() *CrossPackageDependencyExtractor {
 	}
 }
 
-func (e *CrossPackageDependencyExtractor) Extract(result *analyzer.AnalysisResult, g *DependencyGraph) {
+func (e *CrossPackageDependencyExtractor) Extract(result *analyzer.Result, g *DependencyGraph) {
 	logger.Debug("パッケージ間関数呼び出し依存関係抽出開始")
 
 	// パッケージごとのimport情報を構築（同じパッケージの複数ファイルをマージ）

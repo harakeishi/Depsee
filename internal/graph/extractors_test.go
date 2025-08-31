@@ -9,7 +9,7 @@ import (
 
 func TestPackageDependencyExtractor_Extract(t *testing.T) {
 	// テスト用の解析結果を作成
-	result := &analyzer.AnalysisResult{
+	result := &analyzer.Result{
 		Packages: []analyzer.PackageInfo{
 			{
 				Name: "pkg1",
@@ -59,7 +59,7 @@ func TestPackageDependencyExtractor_Extract(t *testing.T) {
 
 func TestCrossPackageDependencyExtractor_Extract(t *testing.T) {
 	// テスト用の解析結果を作成
-	result := &analyzer.AnalysisResult{
+	result := &analyzer.Result{
 		Packages: []analyzer.PackageInfo{
 			{
 				Name: "main",

@@ -70,34 +70,30 @@ func (d *Depsee) Analyze(config Config) error {
 	d.logger.Info("解析開始", "target_dir", config.TargetDir)
 
 	// 解析実行
-	var result *analyzer.AnalysisResult
 	var err error
 
-	// フィルタリング設定をパース
+	// フィルタリング設定をパース :FIXME: cobraの機能でパースできるか確認する
 	targetPackagesList := parseTargetPackages(config.TargetPackages)
 	excludePackagesList := parseTargetPackages(config.ExcludePackages)
 	excludeDirsList := parseTargetPackages(config.ExcludeDirs)
-
-	// フィルタリングが指定されている場合
-	if len(targetPackagesList) > 0 || len(excludePackagesList) > 0 || len(excludeDirsList) > 0 {
-		d.logger.Info("フィルタリング有効",
-			"target_packages", targetPackagesList,
-			"exclude_packages", excludePackagesList,
-			"exclude_dirs", excludeDirsList)
-		result, err = d.analyzer.AnalyzeDirWithFilters(config.TargetDir, targetPackagesList, excludePackagesList, excludeDirsList)
-	} else if config.TargetPackages != "" {
-		// 後方互換性のため、target-packagesのみの場合は既存メソッドを使用
-		d.logger.Info("パッケージフィルタリング有効", "target_packages", targetPackagesList)
-		result, err = d.analyzer.AnalyzeDirWithPackageFilter(config.TargetDir, targetPackagesList)
-	} else {
-		result, err = d.analyzer.AnalyzeDir(config.TargetDir)
+	filters := analyzer.Filters{
+		TargetPackages:  targetPackagesList,
+		ExcludePackages: excludePackagesList,
+		ExcludeDirs:     excludeDirsList,
 	}
-
+	d.analyzer.SetFilters(filters)
+	d.analyzer.ListTartgetFiles(config.TargetDir)
+	err = d.analyzer.Analyze()
 	if err != nil {
 		d.logger.Error("解析失敗", "error", err, "target_dir", config.TargetDir)
 		return err
 	}
 
+	// 解析結果をエクスポート
+	result := d.analyzer.ExportResult()
+	// ここまでリファクタ済み
+
+	fmt.Printf("解析結果: %+v\n\n", result)
 	// 結果表示
 	d.displayResults(result)
 
@@ -163,7 +159,7 @@ func parseTargetPackages(targetPackages string) []string {
 }
 
 // displayResults は解析結果を表示
-func (d *Depsee) displayResults(result *analyzer.AnalysisResult) {
+func (d *Depsee) displayResults(result *analyzer.Result) {
 	fmt.Println("[info] 構造体一覧:")
 	for _, s := range result.Structs {
 		fmt.Printf("  - %s (package: %s, file: %s)\n", s.Name, s.Package, s.File)

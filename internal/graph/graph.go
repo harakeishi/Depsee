@@ -53,7 +53,7 @@ func (g *DependencyGraph) AddEdge(from, to NodeID) {
 }
 
 // BuildDependencyGraph: 静的解析結果から依存グラフを構築
-func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
+func BuildDependencyGraph(result *analyzer.Result) *DependencyGraph {
 	logger.Info("依存グラフ構築開始")
 
 	g := NewDependencyGraph()
@@ -81,7 +81,7 @@ func BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph {
 }
 
 // BuildDependencyGraphWithPackages: パッケージ間依存関係を含む依存グラフを構築
-func BuildDependencyGraphWithPackages(result *analyzer.AnalysisResult, targetDir string) *DependencyGraph {
+func BuildDependencyGraphWithPackages(result *analyzer.Result, targetDir string) *DependencyGraph {
 	logger.Info("パッケージ間依存関係を含む依存グラフ構築開始")
 
 	g := NewDependencyGraph()
@@ -119,7 +119,7 @@ func countEdges(g *DependencyGraph) int {
 }
 
 // registerNodes はノードを登録する
-func registerNodes(result *analyzer.AnalysisResult, g *DependencyGraph) {
+func registerNodes(result *analyzer.Result, g *DependencyGraph) {
 	// 構造体ノード登録
 	for _, s := range result.Structs {
 		id := NodeID(s.Package + "." + s.Name)

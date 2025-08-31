@@ -103,7 +103,7 @@ func TestAddEdge(t *testing.T) {
 
 func TestBuildDependencyGraph(t *testing.T) {
 	// テスト用の解析結果を作成
-	result := &analyzer.AnalysisResult{
+	result := &analyzer.Result{
 		Structs: []analyzer.StructInfo{
 			{
 				Name:    "User",
@@ -179,7 +179,7 @@ func TestBuildDependencyGraph(t *testing.T) {
 func TestRegisterNodes(t *testing.T) {
 	g := NewDependencyGraph()
 
-	result := &analyzer.AnalysisResult{
+	result := &analyzer.Result{
 		Structs: []analyzer.StructInfo{
 			{Name: "TestStruct", Package: "test", File: "test.go"},
 		},

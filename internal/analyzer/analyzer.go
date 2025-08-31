@@ -1,27 +1,38 @@
 package analyzer
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/harakeishi/depsee/internal/errors"
 	"github.com/harakeishi/depsee/internal/logger"
 )
 
-type AnalysisResult struct {
+type Result struct {
 	Structs    []StructInfo
 	Interfaces []InterfaceInfo
 	Functions  []FuncInfo
 	Packages   []PackageInfo
 }
 
+type Filters struct {
+	TargetPackages  []string // 解析対象のパッケージ
+	ExcludePackages []string // 除外するパッケージ
+	ExcludeDirs     []string // 除外するディレクトリ
+}
+
 // GoAnalyzer はGo言語の静的解析を行う具象実装
 type GoAnalyzer struct {
 	// 将来的に設定やオプションを追加可能
+	Filters   Filters  // 解析フィルタ
+	filesPath []string // 解析対象のGoファイルパス
+	Result    *Result  // 解析結果
 }
 
 // New は新しいAnalyzerを作成
@@ -34,305 +45,115 @@ func NewGoAnalyzer() Analyzer {
 	return &GoAnalyzer{}
 }
 
-// AnalyzeDir は指定ディレクトリ配下のGoファイルを再帰的に探索し、構造体・インターフェース・関数を抽出する
-func (ga *GoAnalyzer) AnalyzeDir(dir string) (*AnalysisResult, error) {
-	logger.Debug("ディレクトリ解析開始", "dir", dir)
+// SetFilters は解析フィルタを設定する
+func (ga *GoAnalyzer) SetFilters(filters Filters) {
+	ga.Filters = filters
+}
+
+// ExportResult は解析結果をエクスポートする
+func (ga *GoAnalyzer) ExportResult() *Result {
+	return ga.Result
+}
+
+// ListTartgetFiles は解析対象のGoファイルをリストアップする -- new
+func (ga *GoAnalyzer) ListTartgetFiles(dir string) error {
+	ga.filesPath = []string{}
 
 	// ディレクトリの存在確認
 	if _, err := os.Stat(dir); err != nil {
 		logger.Error("ディレクトリが存在しません", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
+		return errors.NewAnalysisError(dir, err)
 	}
-
-	var files []string
-	errorCollector := errors.NewErrorCollector()
 
 	// ディレクトリ再帰探索
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			logger.Warn("ファイル読み込みエラー", "path", path, "error", err)
-			errorCollector.Add(errors.NewAnalysisError(path, err))
 			return nil // エラーを収集して処理を続行
 		}
-		if d.IsDir() {
-			return nil
-		}
 		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
-			files = append(files, path)
 			logger.Debug("Goファイル発見", "file", path)
+			// filterを適用
+			include, err := ga.Filters.shouldIncludeFile(path)
+			if err != nil {
+				logger.Warn("ファイルフィルタ適用失敗", "path", path, "error", err)
+				return nil // エラーを収集して処理を続行
+			}
+			if include {
+				ga.filesPath = append(ga.filesPath, path)
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		logger.Error("ディレクトリ探索失敗", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
+		return errors.NewAnalysisError(dir, err)
 	}
 
-	logger.Info("Goファイル発見完了", "count", len(files))
+	return nil
+}
 
+// shouldIncludeFile はファイルがフィルタに適合するかどうかを判定  -- new
+func (f Filters) shouldIncludeFile(path string) (bool, error) {
 	fset := token.NewFileSet()
-	result := &AnalysisResult{}
 
-	for _, file := range files {
-		f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
-		if err != nil {
-			logger.Warn("ファイルパース失敗", "file", file, "error", err)
-			errorCollector.Add(errors.NewAnalysisError(file, err))
-			continue // パースエラーがあっても他のファイルは処理を続行
-		}
-		analyzeFile(f, fset, file, result)
-	}
-
-	// 重大なエラーがある場合は失敗とする
-	if errorCollector.HasErrors() {
-		logger.Warn("解析中にエラーが発生しました", "error_count", len(errorCollector.Errors()))
-		// 部分的な結果でも返す（警告として扱う）
-	}
-
-	return result, nil
-}
-
-// 後方互換性のためのラッパー関数
-func AnalyzeDir(dir string) (*AnalysisResult, error) {
-	analyzer := NewGoAnalyzer()
-	return analyzer.AnalyzeDir(dir)
-}
-
-// AnalyzeDirWithPackageFilter は指定されたパッケージのみを解析対象とする
-func (ga *GoAnalyzer) AnalyzeDirWithPackageFilter(dir string, targetPackages []string) (*AnalysisResult, error) {
-	logger.Debug("パッケージフィルタ付きディレクトリ解析開始", "dir", dir, "target_packages", targetPackages)
-
-	// 全体解析を実行
-	result, err := ga.AnalyzeDir(dir)
+	file, err := parser.ParseFile(fset, path, nil, parser.PackageClauseOnly)
 	if err != nil {
-		return nil, err
+		logger.Warn("ファイルパース失敗", "path", path, "error", err)
+		return false, err
+	}
+	packageName := file.Name.Name
+	// ターゲットパッケージのチェック(もし含まれていなかったら早期リターン)
+	if !slices.Contains(f.TargetPackages, packageName) {
+		return false, nil
+	}
+	// 除外パッケージのチェック(もし含まれていたら早期リターン)
+	if slices.Contains(f.ExcludePackages, packageName) {
+		return false, nil
 	}
 
-	// パッケージフィルタリングが指定されていない場合は全結果を返す
-	if len(targetPackages) == 0 {
-		return result, nil
-	}
-
-	// 対象パッケージのセットを作成
-	targetSet := make(map[string]bool)
-	for _, pkg := range targetPackages {
-		targetSet[pkg] = true
-	}
-
-	// フィルタリング実行
-	filteredResult := &AnalysisResult{}
-
-	// 構造体のフィルタリング
-	for _, s := range result.Structs {
-		if targetSet[s.Package] {
-			filteredResult.Structs = append(filteredResult.Structs, s)
+	// 除外ディレクトリのチェック(もし含まれていたら早期リターン)
+	if len(f.ExcludeDirs) > 0 {
+		for _, excludeDir := range f.ExcludeDirs {
+			rel, err := filepath.Rel(excludeDir, path)
+			if err != nil {
+				logger.Warn("ディレクトリ相対パス取得失敗", "path", path, "error", err)
+				return false, err
+			}
+			// パスに..が含まれていない場合(つまりディレクトリが一致していたら)は早期リターン
+			if !strings.Contains(rel, "..") {
+				return false, nil
+			}
 		}
 	}
-
-	// インターフェースのフィルタリング
-	for _, i := range result.Interfaces {
-		if targetSet[i.Package] {
-			filteredResult.Interfaces = append(filteredResult.Interfaces, i)
-		}
-	}
-
-	// 関数のフィルタリング
-	for _, f := range result.Functions {
-		if targetSet[f.Package] {
-			filteredResult.Functions = append(filteredResult.Functions, f)
-		}
-	}
-
-	// パッケージのフィルタリング
-	for _, p := range result.Packages {
-		if targetSet[p.Name] {
-			filteredResult.Packages = append(filteredResult.Packages, p)
-		}
-	}
-
-	logger.Info("パッケージフィルタリング完了",
-		"original_structs", len(result.Structs), "filtered_structs", len(filteredResult.Structs),
-		"original_interfaces", len(result.Interfaces), "filtered_interfaces", len(filteredResult.Interfaces),
-		"original_functions", len(result.Functions), "filtered_functions", len(filteredResult.Functions),
-		"original_packages", len(result.Packages), "filtered_packages", len(filteredResult.Packages))
-
-	return filteredResult, nil
+	return true, nil
 }
 
-// AnalyzeDirWithFilters は指定されたパッケージ・ディレクトリの除外機能付きで解析を行う
-func (ga *GoAnalyzer) AnalyzeDirWithFilters(dir string, targetPackages []string, excludePackages []string, excludeDirs []string) (*AnalysisResult, error) {
-	logger.Debug("フィルタ付きディレクトリ解析開始", "dir", dir,
-		"target_packages", targetPackages,
-		"exclude_packages", excludePackages,
-		"exclude_dirs", excludeDirs)
-
-	// ディレクトリの存在確認
-	if _, err := os.Stat(dir); err != nil {
-		logger.Error("ディレクトリが存在しません", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
+// Analyze は指定ディレクトリ配下のGoファイルを再帰的に探索し、構造体・インターフェース・関数を抽出する
+func (ga *GoAnalyzer) Analyze() error {
+	if len(ga.filesPath) == 0 {
+		return errors.NewAnalysisError("解析対象のファイルが存在しません", nil)
 	}
-
-	var files []string
+	ga.Result = &Result{}
+	fset := token.NewFileSet()
 	errorCollector := errors.NewErrorCollector()
 
-	// 除外ディレクトリのセットを作成
-	excludeDirSet := make(map[string]bool)
-	for _, excludeDir := range excludeDirs {
-		excludeDirSet[strings.TrimSpace(excludeDir)] = true
-	}
-
-	// ディレクトリ再帰探索（除外ディレクトリをスキップ）
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			logger.Warn("ファイル読み込みエラー", "path", path, "error", err)
-			errorCollector.Add(errors.NewAnalysisError(path, err))
-			return nil // エラーを収集して処理を続行
-		}
-
-		// ディレクトリの除外チェック
-		if d.IsDir() {
-			relPath, _ := filepath.Rel(dir, path)
-			if shouldExcludeDir(relPath, excludeDirSet) {
-				logger.Debug("ディレクトリを除外", "path", relPath)
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
-			files = append(files, path)
-			logger.Debug("Goファイル発見", "file", path)
-		}
-		return nil
-	})
-	if err != nil {
-		logger.Error("ディレクトリ探索失敗", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
-	}
-
-	logger.Info("Goファイル発見完了", "count", len(files))
-
-	fset := token.NewFileSet()
-	result := &AnalysisResult{}
-
-	for _, file := range files {
+	for _, file := range ga.filesPath {
+		// 解析処理
+		fmt.Println(file)
 		f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
 		if err != nil {
 			logger.Warn("ファイルパース失敗", "file", file, "error", err)
 			errorCollector.Add(errors.NewAnalysisError(file, err))
 			continue // パースエラーがあっても他のファイルは処理を続行
 		}
-		analyzeFile(f, fset, file, result)
+		analyzeFile(f, fset, file, ga.Result)
 	}
-
-	// 重大なエラーがある場合は失敗とする
-	if errorCollector.HasErrors() {
-		logger.Warn("解析中にエラーが発生しました", "error_count", len(errorCollector.Errors()))
-		// 部分的な結果でも返す（警告として扱う）
-	}
-
-	// パッケージフィルタリングを適用
-	filteredResult := applyPackageFilters(result, targetPackages, excludePackages)
-
-	logger.Info("フィルタリング完了",
-		"original_structs", len(result.Structs), "filtered_structs", len(filteredResult.Structs),
-		"original_interfaces", len(result.Interfaces), "filtered_interfaces", len(filteredResult.Interfaces),
-		"original_functions", len(result.Functions), "filtered_functions", len(filteredResult.Functions),
-		"original_packages", len(result.Packages), "filtered_packages", len(filteredResult.Packages))
-
-	return filteredResult, nil
-}
-
-// shouldExcludeDir は指定されたディレクトリが除外対象かどうかを判定
-func shouldExcludeDir(relPath string, excludeDirSet map[string]bool) bool {
-	if relPath == "." {
-		return false
-	}
-
-	// 完全一致チェック
-	if excludeDirSet[relPath] {
-		return true
-	}
-
-	// パスの各部分をチェック（例：vendor/github.com/... の場合、vendorで除外）
-	parts := strings.Split(relPath, string(filepath.Separator))
-	for _, part := range parts {
-		if excludeDirSet[part] {
-			return true
-		}
-	}
-
-	return false
-}
-
-// applyPackageFilters はターゲットパッケージと除外パッケージのフィルタリングを適用
-func applyPackageFilters(result *AnalysisResult, targetPackages []string, excludePackages []string) *AnalysisResult {
-	// ターゲットパッケージのセットを作成
-	var targetSet map[string]bool
-	if len(targetPackages) > 0 {
-		targetSet = make(map[string]bool)
-		for _, pkg := range targetPackages {
-			targetSet[strings.TrimSpace(pkg)] = true
-		}
-	}
-
-	// 除外パッケージのセットを作成
-	excludeSet := make(map[string]bool)
-	for _, pkg := range excludePackages {
-		excludeSet[strings.TrimSpace(pkg)] = true
-	}
-
-	filteredResult := &AnalysisResult{}
-
-	// 構造体のフィルタリング
-	for _, s := range result.Structs {
-		if shouldIncludePackage(s.Package, targetSet, excludeSet) {
-			filteredResult.Structs = append(filteredResult.Structs, s)
-		}
-	}
-
-	// インターフェースのフィルタリング
-	for _, i := range result.Interfaces {
-		if shouldIncludePackage(i.Package, targetSet, excludeSet) {
-			filteredResult.Interfaces = append(filteredResult.Interfaces, i)
-		}
-	}
-
-	// 関数のフィルタリング
-	for _, f := range result.Functions {
-		if shouldIncludePackage(f.Package, targetSet, excludeSet) {
-			filteredResult.Functions = append(filteredResult.Functions, f)
-		}
-	}
-
-	// パッケージのフィルタリング
-	for _, p := range result.Packages {
-		if shouldIncludePackage(p.Name, targetSet, excludeSet) {
-			filteredResult.Packages = append(filteredResult.Packages, p)
-		}
-	}
-
-	return filteredResult
-}
-
-// shouldIncludePackage はパッケージが含まれるべきかどうかを判定
-func shouldIncludePackage(packageName string, targetSet map[string]bool, excludeSet map[string]bool) bool {
-	// 除外パッケージに含まれている場合は除外
-	if excludeSet[packageName] {
-		return false
-	}
-
-	// ターゲットパッケージが指定されている場合は、それに含まれているもののみ
-	if targetSet != nil {
-		return targetSet[packageName]
-	}
-
-	// ターゲットパッケージが指定されていない場合は、除外されていなければ含める
-	return true
+	return nil
 }
 
 // analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
-func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *AnalysisResult) {
+func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) {
 	pkgName := f.Name.Name
 	structMap := map[string]*StructInfo{}
 
