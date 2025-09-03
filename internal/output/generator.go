@@ -10,10 +10,7 @@ func NewGenerator() OutputGenerator {
 	return &Generator{}
 }
 
-// NewOutputGenerator は新しいOutputGeneratorインスタンスを作成
-func NewOutputGenerator() OutputGenerator {
-	return &Generator{}
-}
+
 
 // GenerateMermaid はMermaid記法の相関図を生成
 func (g *Generator) GenerateMermaid(dependencyGraph *graph.DependencyGraph, stability *graph.StabilityResult) string {

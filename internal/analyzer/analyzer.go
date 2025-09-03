@@ -41,11 +41,6 @@ func New() Analyzer {
 	return &GoAnalyzer{}
 }
 
-// NewGoAnalyzer は新しいGoAnalyzerを作成
-func NewGoAnalyzer() Analyzer {
-	return &GoAnalyzer{}
-}
-
 // SetFilters は解析フィルタを設定する
 // :FIXME: コンストラクタで設定する
 func (ga *GoAnalyzer) SetFilters(filters Filters) {
@@ -183,33 +178,6 @@ func (ga *GoAnalyzer) extractDependencies(result *Result) []DependencyInfo {
 	}
 
 	logger.Info("依存関係解析完了", "total_dependencies", len(allDependencies))
-	return allDependencies
-}
-
-// extractDependenciesWithPackages は解析結果から依存関係を抽出する（パッケージ間依存関係を含む）
-func (ga *GoAnalyzer) extractDependenciesWithPackages(result *Result, targetDir string) []DependencyInfo {
-	logger.Info("依存関係解析開始（パッケージ間を含む）")
-
-	var allDependencies []DependencyInfo
-
-	// 型解析器の初期化
-	typeResolver := NewTypeResolver()
-
-	// 依存関係抽出（戦略パターンを使用）
-	extractors := []DependencyExtractor{
-		NewFieldDependencyExtractor(typeResolver),
-		&SignatureDependencyExtractor{},
-		&BodyCallDependencyExtractor{},
-		NewCrossPackageDependencyExtractor(),
-		NewPackageDependencyExtractor(targetDir),
-	}
-
-	for _, extractor := range extractors {
-		dependencies := extractor.Extract(result)
-		allDependencies = append(allDependencies, dependencies...)
-	}
-
-	logger.Info("依存関係解析完了（パッケージ間を含む）", "total_dependencies", len(allDependencies))
 	return allDependencies
 }
 
@@ -459,16 +427,4 @@ func extractBodyCalls(body *ast.BlockStmt) []string {
 		return true
 	})
 	return calls
-}
-
-// 名前からFuncDeclを探す（同一ファイル内のみ）
-func findFuncDeclByName(f *ast.File, name string) *ast.BlockStmt {
-	for _, decl := range f.Decls {
-		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-			if funcDecl.Name.Name == name {
-				return funcDecl.Body
-			}
-		}
-	}
-	return nil
 }

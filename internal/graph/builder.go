@@ -10,11 +10,6 @@ func NewBuilder() GraphBuilder {
 	return &Builder{}
 }
 
-// NewGraphBuilder は新しいGraphBuilderインスタンスを作成
-func NewGraphBuilder() GraphBuilder {
-	return &Builder{}
-}
-
 // BuildDependencyGraph は静的解析結果から依存グラフを構築
 func (b *Builder) BuildDependencyGraph(result *analyzer.Result) *DependencyGraph {
 	return BuildDependencyGraph(result)
