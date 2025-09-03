@@ -171,11 +171,19 @@ func (a *analyzer) calculatePackageStability(g *graph.DependencyGraph) map[strin
 	// Collect all packages and their dependencies
 	for from, tos := range g.Edges {
 		fromNode := g.Nodes[from]
-		if fromNode == nil || fromNode.Kind == graph.NodePackage {
+		if fromNode == nil {
 			continue
 		}
 		
-		fromPkg := fromNode.Package
+		var fromPkg string
+		if fromNode.Kind == graph.NodePackage {
+			// パッケージノードの場合、パッケージ名を直接使用
+			fromPkg = fromNode.Package
+		} else {
+			// 通常のノードの場合、そのノードのパッケージを使用
+			fromPkg = fromNode.Package
+		}
+		
 		packages[fromPkg] = struct{}{}
 		
 		if packageDeps[fromPkg] == nil {
@@ -184,11 +192,19 @@ func (a *analyzer) calculatePackageStability(g *graph.DependencyGraph) map[strin
 		
 		for to := range tos {
 			toNode := g.Nodes[to]
-			if toNode == nil || toNode.Kind == graph.NodePackage {
+			if toNode == nil {
 				continue
 			}
 			
-			toPkg := toNode.Package
+			var toPkg string
+			if toNode.Kind == graph.NodePackage {
+				// パッケージノードの場合、パッケージ名を直接使用
+				toPkg = toNode.Package
+			} else {
+				// 通常のノードの場合、そのノードのパッケージを使用
+				toPkg = toNode.Package
+			}
+			
 			packages[toPkg] = struct{}{}
 			
 			if fromPkg != toPkg {

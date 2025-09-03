@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/harakeishi/depsee/internal/analyzer/stability"
 	"github.com/harakeishi/depsee/internal/graph"
 	"github.com/harakeishi/depsee/internal/types"
 )
@@ -157,8 +158,8 @@ func TestGenerateMermaidWithReservedWords(t *testing.T) {
 	g.AddEdge("pkg.end", "pkg.User")
 
 	// 安定度情報を作成
-	stability := &graph.StabilityResult{
-		NodeStabilities: map[types.NodeID]*graph.NodeStability{
+	stabilityResult := &stability.Result{
+		NodeStabilities: map[types.NodeID]*stability.NodeStability{
 			"pkg.graph": {
 				NodeID:      "pkg.graph",
 				OutDegree:   1,
@@ -233,8 +234,8 @@ func TestGenerateMermaidWithSpecialCharacters(t *testing.T) {
 
 	g.AddNode(specialNode)
 
-	stability := &graph.StabilityResult{
-		NodeStabilities: map[types.NodeID]*graph.NodeStability{
+	stabilityResult := &stability.Result{
+		NodeStabilities: map[types.NodeID]*stability.NodeStability{
 			"pkg.User-Service": {
 				NodeID:      "pkg.User-Service",
 				OutDegree:   0,
@@ -293,8 +294,8 @@ func TestGenerateMermaidWithPackageStability(t *testing.T) {
 	g.AddEdge("package:pkg1", "pkg2.Profile") // パッケージノードから（除外されるべき）
 
 	// 安定度情報を作成
-	stability := &graph.StabilityResult{
-		NodeStabilities: map[types.NodeID]*graph.NodeStability{
+	stabilityResult := &stability.Result{
+		NodeStabilities: map[types.NodeID]*stability.NodeStability{
 			"pkg1.User": {
 				NodeID:      "pkg1.User",
 				OutDegree:   1,
@@ -314,7 +315,7 @@ func TestGenerateMermaidWithPackageStability(t *testing.T) {
 				Instability: 1.0,
 			},
 		},
-		PackageStabilities: map[string]*graph.PackageStability{
+		PackageStabilities: map[string]*stability.PackageStability{
 			"pkg1": {
 				PackageName: "pkg1",
 				OutDegree:   1,
@@ -408,8 +409,8 @@ func TestGenerateMermaidWithSDPViolations(t *testing.T) {
 	g.AddEdge("pkg.Normal", "pkg.Stable")   // 正常: 中間 → 安定
 
 	// 安定度情報を作成（SDP違反が発生するように設定）
-	stability := &graph.StabilityResult{
-		NodeStabilities: map[types.NodeID]*graph.NodeStability{
+	stabilityResult := &stability.Result{
+		NodeStabilities: map[types.NodeID]*stability.NodeStability{
 			"pkg.Stable": {
 				NodeID:      "pkg.Stable",
 				OutDegree:   1,   // 1つに依存
@@ -429,7 +430,7 @@ func TestGenerateMermaidWithSDPViolations(t *testing.T) {
 				Instability: 0.5, // 中間の不安定度
 			},
 		},
-		SDPViolations: []graph.SDPViolation{
+		SDPViolations: []stability.SDPViolation{
 			{
 				From:              "pkg.Stable",
 				To:                "pkg.Unstable",
