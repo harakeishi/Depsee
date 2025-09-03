@@ -2,7 +2,11 @@
 // 構造体、インターフェース、関数の情報抽出や依存関係の分析を行います。
 package analyzer
 
-import "go/token"
+import (
+	"go/token"
+
+	"github.com/harakeishi/depsee/internal/types"
+)
 
 // StructInfo は構造体の情報を表します。
 // 構造体の基本情報（名前、パッケージ、ファイル位置等）とフィールド、
@@ -52,24 +56,24 @@ type FieldInfo struct {
 // 構造体、インターフェース、関数の全てのノードIDを登録し、
 // 依存先ノードの存在確認に使用されます。
 // このメソッドは主に依存関係抽出で使用されます。
-func (r *Result) CreateNodeMap() map[NodeID]struct{} {
-	nodeMap := make(map[NodeID]struct{})
+func (r *Result) CreateNodeMap() map[types.NodeID]struct{} {
+	nodeMap := make(map[types.NodeID]struct{})
 
 	// 構造体ノード登録
 	for _, s := range r.Structs {
-		id := NodeID(s.Package + "." + s.Name)
+		id := types.NewNodeID(s.Package, s.Name)
 		nodeMap[id] = struct{}{}
 	}
 
 	// インターフェースノード登録
 	for _, i := range r.Interfaces {
-		id := NodeID(i.Package + "." + i.Name)
+		id := types.NewNodeID(i.Package, i.Name)
 		nodeMap[id] = struct{}{}
 	}
 
 	// 関数ノード登録
 	for _, f := range r.Functions {
-		id := NodeID(f.Package + "." + f.Name)
+		id := types.NewNodeID(f.Package, f.Name)
 		nodeMap[id] = struct{}{}
 	}
 

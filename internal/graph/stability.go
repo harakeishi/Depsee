@@ -2,10 +2,12 @@ package graph
 
 import (
 	"strings"
+
+	"github.com/harakeishi/depsee/internal/types"
 )
 
 type NodeStability struct {
-	NodeID      NodeID
+	NodeID      types.NodeID
 	OutDegree   int     // Ce: 出次数（このノードが依存している数）
 	InDegree    int     // Ca: 入次数（このノードに依存している数）
 	Instability float64 // I = Ce / (Ca + Ce): 不安定度（0=安定、1=不安定）
@@ -21,23 +23,23 @@ type PackageStability struct {
 
 // SDPViolation はSDP（Stable Dependencies Principle）違反を表す
 type SDPViolation struct {
-	From              NodeID  // 依存元ノード
-	To                NodeID  // 依存先ノード
+	From              types.NodeID  // 依存元ノード
+	To                types.NodeID  // 依存先ノード
 	FromInstability   float64 // 依存元の不安定度
 	ToInstability     float64 // 依存先の不安定度
 	ViolationSeverity float64 // 違反の深刻度（不安定度の差）
 }
 
 type StabilityResult struct {
-	NodeStabilities    map[NodeID]*NodeStability
+	NodeStabilities    map[types.NodeID]*NodeStability
 	PackageStabilities map[string]*PackageStability
 	SDPViolations      []SDPViolation // SDP違反のリスト
 }
 
 // CalculateStability: 依存グラフから各ノードの不安定度を算出
 func CalculateStability(g *DependencyGraph) *StabilityResult {
-	inDegree := make(map[NodeID]int)
-	outDegree := make(map[NodeID]int)
+	inDegree := make(map[types.NodeID]int)
+	outDegree := make(map[types.NodeID]int)
 
 	// 出次数（依存数）
 	for from, tos := range g.Edges {
@@ -48,7 +50,7 @@ func CalculateStability(g *DependencyGraph) *StabilityResult {
 	}
 
 	result := &StabilityResult{
-		NodeStabilities:    make(map[NodeID]*NodeStability),
+		NodeStabilities:    make(map[types.NodeID]*NodeStability),
 		PackageStabilities: make(map[string]*PackageStability),
 	}
 
@@ -141,7 +143,7 @@ func calculatePackageStability(g *DependencyGraph) map[string]*PackageStability 
 			var toPkg string
 			if toNode.Kind == NodePackage {
 				// パッケージノードの場合
-				toPkg = extractPackageNameFromNodeID(string(toNode.ID))
+				toPkg = extractPackageNameFromNodeID(toNode.ID.String())
 			} else {
 				// 通常のノードの場合
 				toPkg = toNode.Package
@@ -202,7 +204,7 @@ func extractPackageNameFromNodeID(nodeID string) string {
 }
 
 // detectSDPViolations はSDP（Stable Dependencies Principle）違反を検出
-func detectSDPViolations(g *DependencyGraph, nodeStabilities map[NodeID]*NodeStability) []SDPViolation {
+func detectSDPViolations(g *DependencyGraph, nodeStabilities map[types.NodeID]*NodeStability) []SDPViolation {
 	var violations []SDPViolation
 
 	for from, tos := range g.Edges {

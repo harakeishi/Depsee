@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/harakeishi/depsee/internal/graph"
+	"github.com/harakeishi/depsee/internal/types"
 )
 
 // mermaidの予約語リスト
@@ -95,7 +96,7 @@ func escapeNodeLabel(label string) string {
 
 // nodeWithStability は不安定度情報を含むノード
 type nodeWithStability struct {
-	ID          graph.NodeID
+	ID          types.NodeID
 	Name        string
 	Kind        graph.NodeKind
 	Package     string
@@ -153,7 +154,7 @@ func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.Stabi
 	sort.Strings(packages)
 
 	// ノードIDのマッピングを作成
-	idMapping := make(map[graph.NodeID]string)
+	idMapping := make(map[types.NodeID]string)
 
 	// SDP違反のエッジを特定（ハイライト機能が有効な場合）
 	var sdpViolationEdges map[string]bool

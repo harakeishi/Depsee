@@ -82,7 +82,14 @@ func (d *Depsee) Analyze(config Config) error {
 		ExcludeDirs:     excludeDirsList,
 	}
 	d.analyzer.SetFilters(filters)
-	d.analyzer.ListTartgetFiles(config.TargetDir)
+	
+	// ファイルリストアップ
+	if err := d.analyzer.ListTartgetFiles(config.TargetDir); err != nil {
+		d.logger.Error("ファイルリストアップ失敗", "error", err, "target_dir", config.TargetDir)
+		return fmt.Errorf("ファイルリストアップ失敗: %w", err)
+	}
+	
+	// 解析実行
 	err = d.analyzer.Analyze()
 	if err != nil {
 		d.logger.Error("解析失敗", "error", err, "target_dir", config.TargetDir)
@@ -110,15 +117,17 @@ func (d *Depsee) Analyze(config Config) error {
 
 	// SDP違反の表示
 	if len(stability.SDPViolations) > 0 {
-		fmt.Println("[info] SDP違反:")
+		d.logger.Info("SDP違反検出", "count", len(stability.SDPViolations))
 		for _, violation := range stability.SDPViolations {
-			fmt.Printf("  %s (不安定度:%.2f) --> %s (不安定度:%.2f) [違反度:%.2f]\n",
-				violation.From, violation.FromInstability,
-				violation.To, violation.ToInstability,
-				violation.ViolationSeverity)
+			d.logger.Warn("SDP違反",
+				"from", violation.From,
+				"from_instability", violation.FromInstability,
+				"to", violation.To,
+				"to_instability", violation.ToInstability,
+				"severity", violation.ViolationSeverity)
 		}
 	} else {
-		fmt.Println("[info] SDP違反: なし")
+		d.logger.Info("SDP違反なし")
 	}
 
 	// Mermaid記法の相関図出力

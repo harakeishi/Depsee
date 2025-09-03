@@ -2,6 +2,8 @@ package analyzer
 
 import (
 	"testing"
+
+	"github.com/harakeishi/depsee/internal/types"
 )
 
 // テスト用のヘルパー関数
@@ -109,11 +111,11 @@ func TestFieldDependencyExtractor(t *testing.T) {
 			name:   "基本的なフィールド依存関係",
 			result: createTestResult(),
 			expectedDependencies: []DependencyInfo{
-				{From: "test.User", To: "test.Profile", Type: FieldDependency},
-				{From: "test.User", To: "test.Post", Type: FieldDependency},
-				{From: "test.User", To: "test.UserSettings", Type: FieldDependency},
-				{From: "test.Profile", To: "test.User", Type: FieldDependency},
-				{From: "test.Post", To: "test.User", Type: FieldDependency},
+				{From: types.NewNodeID("test", "User"), To: types.NewNodeID("test", "Profile"), Type: types.FieldDependency},
+				{From: types.NewNodeID("test", "User"), To: types.NewNodeID("test", "Post"), Type: types.FieldDependency},
+				{From: types.NewNodeID("test", "User"), To: types.NewNodeID("test", "UserSettings"), Type: types.FieldDependency},
+				{From: types.NewNodeID("test", "Profile"), To: types.NewNodeID("test", "User"), Type: types.FieldDependency},
+				{From: types.NewNodeID("test", "Post"), To: types.NewNodeID("test", "User"), Type: types.FieldDependency},
 			},
 		},
 		{
@@ -183,7 +185,7 @@ func TestFieldDependencyExtractor_parseTypeToNodeID(t *testing.T) {
 		name     string
 		typeName string
 		pkg      string
-		expected NodeID
+		expected types.NodeID
 	}{
 		{
 			name:     "シンプルな型",
@@ -246,9 +248,9 @@ func TestSignatureDependencyExtractor(t *testing.T) {
 			name:   "関数のシグネチャ依存関係",
 			result: createTestResult(),
 			expectedDependencies: []DependencyInfo{
-				{From: "test.CreateUser", To: "test.User", Type: SignatureDependency},
-				{From: "test.GetUserPosts", To: "test.User", Type: SignatureDependency},
-				{From: "test.GetUserPosts", To: "test.Post", Type: SignatureDependency},
+				{From: "test.CreateUser", To: "test.User", Type: types.SignatureDependency},
+				{From: "test.GetUserPosts", To: "test.User", Type: types.SignatureDependency},
+				{From: "test.GetUserPosts", To: "test.Post", Type: types.SignatureDependency},
 			},
 		},
 		{
@@ -282,7 +284,7 @@ func TestSignatureDependencyExtractor(t *testing.T) {
 				},
 			},
 			expectedDependencies: []DependencyInfo{
-				{From: "test.UpdateProfile", To: "test.Profile", Type: SignatureDependency},
+				{From: "test.UpdateProfile", To: "test.Profile", Type: types.SignatureDependency},
 			},
 		},
 		{
@@ -344,9 +346,9 @@ func TestBodyCallDependencyExtractor(t *testing.T) {
 			name:   "関数本体の呼び出し依存関係",
 			result: createTestResult(),
 			expectedDependencies: []DependencyInfo{
-				{From: "test.CreateUser", To: "test.User", Type: BodyCallDependency},
-				{From: "test.CreateUser", To: "test.Profile", Type: BodyCallDependency},
-				{From: "test.CreateUser", To: "test.UserSettings", Type: BodyCallDependency},
+				{From: "test.CreateUser", To: "test.User", Type: types.BodyCallDependency},
+				{From: "test.CreateUser", To: "test.Profile", Type: types.BodyCallDependency},
+				{From: "test.CreateUser", To: "test.UserSettings", Type: types.BodyCallDependency},
 			},
 		},
 		{
@@ -380,8 +382,8 @@ func TestBodyCallDependencyExtractor(t *testing.T) {
 				},
 			},
 			expectedDependencies: []DependencyInfo{
-				{From: "test.Save", To: "test.Profile", Type: BodyCallDependency},
-				{From: "test.Save", To: "test.UserSettings", Type: BodyCallDependency},
+				{From: "test.Save", To: "test.Profile", Type: types.BodyCallDependency},
+				{From: "test.Save", To: "test.UserSettings", Type: types.BodyCallDependency},
 			},
 		},
 		{
@@ -464,7 +466,7 @@ func TestPackageDependencyExtractor(t *testing.T) {
 			},
 			targetDir: "/test",
 			expectedDependencies: []DependencyInfo{
-				{From: "package:pkg1", To: "package:pkg2", Type: PackageDependency},
+				{From: "package:pkg1", To: "package:pkg2", Type: types.PackageDependency},
 			},
 		},
 		{
@@ -549,7 +551,7 @@ func TestCrossPackageDependencyExtractor(t *testing.T) {
 				},
 			},
 			expectedDependencies: []DependencyInfo{
-				{From: "test.UseOtherPackage", To: "other.SomeFunc", Type: CrossPackageDependency},
+				{From: "test.UseOtherPackage", To: "other.SomeFunc", Type: types.CrossPackageDependency},
 			},
 		},
 		{
@@ -589,7 +591,7 @@ func TestCrossPackageDependencyExtractor(t *testing.T) {
 				},
 			},
 			expectedDependencies: []DependencyInfo{
-				{From: "test.Process", To: "utils.Validate", Type: CrossPackageDependency},
+				{From: "test.Process", To: "utils.Validate", Type: types.CrossPackageDependency},
 			},
 		},
 		{
@@ -694,45 +696,4 @@ func TestCrossPackageDependencyExtractor_extractPackageAlias(t *testing.T) {
 	}
 }
 
-func TestDependencyType_String(t *testing.T) {
-	tests := []struct {
-		name     string
-		depType  DependencyType
-		expected string
-	}{
-		{
-			name:     "FieldDependency",
-			depType:  FieldDependency,
-			expected: "0", // iota value
-		},
-		{
-			name:     "SignatureDependency",
-			depType:  SignatureDependency,
-			expected: "1", // iota value
-		},
-		{
-			name:     "BodyCallDependency",
-			depType:  BodyCallDependency,
-			expected: "2", // iota value
-		},
-		{
-			name:     "CrossPackageDependency",
-			depType:  CrossPackageDependency,
-			expected: "3", // iota value
-		},
-		{
-			name:     "PackageDependency",
-			depType:  PackageDependency,
-			expected: "4", // iota value
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := string(rune(tt.depType + '0')) // int to string conversion
-			if result != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, result)
-			}
-		})
-	}
-}
+// TestDependencyType_String はtypesパッケージに移動したため削除

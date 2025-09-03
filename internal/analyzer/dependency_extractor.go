@@ -4,37 +4,17 @@ import (
 	"strings"
 
 	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/harakeishi/depsee/internal/types"
 	"github.com/harakeishi/depsee/internal/utils"
 )
 
 // DependencyInfo は依存関係情報を表す構造体です。
 // 依存元ノード、依存先ノード、依存関係の種類を定義します。
 type DependencyInfo struct {
-	From NodeID         // 依存元のノードID
-	To   NodeID         // 依存先のノードID
-	Type DependencyType // 依存関係の種類
+	From types.NodeID         // 依存元のノードID
+	To   types.NodeID         // 依存先のノードID
+	Type types.DependencyType // 依存関係の種類
 }
-
-// NodeID はノードの一意識別子です。
-// 「package.Name」形式で構造体、インターフェース、関数を一意に識別します。
-type NodeID string
-
-// DependencyType は依存関係の種類を表す列挙型です。
-// フィールド、シグネチャ、関数呼び出し、パッケージ間依存等を区別します。
-type DependencyType int
-
-const (
-	// FieldDependency は構造体のフィールドによる依存関係です
-	FieldDependency DependencyType = iota
-	// SignatureDependency は関数・メソッドのシグネチャ（引数・戻り値）による依存関係です
-	SignatureDependency
-	// BodyCallDependency は関数本体内の呼び出しによる依存関係です
-	BodyCallDependency
-	// CrossPackageDependency はパッケージ間の関数呼び出しや型使用による依存関係です
-	CrossPackageDependency
-	// PackageDependency はimport文によるパッケージ間依存関係です
-	PackageDependency
-)
 
 // DependencyExtractor は依存関係抽出の戦略インターフェースです。
 // Strategyパターンを使用して、異なる種類の依存関係抽出ロジックを実装します。
@@ -68,7 +48,7 @@ func (e *FieldDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	nodeMap := result.CreateNodeMap()
 
 	for _, s := range result.Structs {
-		fromID := NodeID(s.Package + "." + s.Name)
+		fromID := types.NewNodeID(s.Package, s.Name)
 		logger.Debug("構造体フィールド解析", "struct", s.Name, "package", s.Package)
 
 		for _, field := range s.Fields {
@@ -77,7 +57,7 @@ func (e *FieldDependencyExtractor) Extract(result *Result) []DependencyInfo {
 					dependencies = append(dependencies, DependencyInfo{
 						From: fromID,
 						To:   toID,
-						Type: FieldDependency,
+						Type: types.FieldDependency,
 					})
 					logger.Debug("フィールド依存関係追加", "from", fromID, "to", toID, "field", field.Name)
 				} else {
@@ -93,13 +73,13 @@ func (e *FieldDependencyExtractor) Extract(result *Result) []DependencyInfo {
 // parseTypeToNodeID は型名からノードIDを生成します。
 // ポインタやスライスのプレフィックスを取り除き、パッケージ名と結合して
 // 一意のノードIDを生成します。
-func (e *FieldDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeID {
+func (e *FieldDependencyExtractor) parseTypeToNodeID(typeName, pkg string) types.NodeID {
 	// より安全な型解析ロジック
 	cleaned := strings.TrimLeft(typeName, "*[]")
 	if cleaned == "" || strings.Contains(cleaned, "map[") {
 		return ""
 	}
-	return NodeID(pkg + "." + cleaned)
+	return types.NewNodeID(pkg, cleaned)
 }
 
 
@@ -117,7 +97,7 @@ func (e *SignatureDependencyExtractor) Extract(result *Result) []DependencyInfo 
 
 	// 関数の引数・戻り値の依存関係抽出
 	for _, f := range result.Functions {
-		fromID := NodeID(f.Package + "." + f.Name)
+		fromID := types.NewNodeID(f.Package, f.Name)
 		dependencies = append(dependencies, e.extractFromParams(f.Params, fromID, f.Package, nodeMap)...)
 		dependencies = append(dependencies, e.extractFromParams(f.Results, fromID, f.Package, nodeMap)...)
 	}
@@ -125,7 +105,7 @@ func (e *SignatureDependencyExtractor) Extract(result *Result) []DependencyInfo 
 	// メソッドの引数・戻り値の依存関係抽出
 	for _, s := range result.Structs {
 		for _, m := range s.Methods {
-			fromID := NodeID(s.Package + "." + m.Name)
+			fromID := types.NewNodeID(s.Package, m.Name)
 			dependencies = append(dependencies, e.extractFromParams(m.Params, fromID, s.Package, nodeMap)...)
 			dependencies = append(dependencies, e.extractFromParams(m.Results, fromID, s.Package, nodeMap)...)
 		}
@@ -136,7 +116,7 @@ func (e *SignatureDependencyExtractor) Extract(result *Result) []DependencyInfo 
 
 // extractFromParams はパラメータ一覧から依存関係を抽出します。
 // 各パラメータの型を解析し、他のノードへの依存関係を検出します。
-func (e *SignatureDependencyExtractor) extractFromParams(params []FieldInfo, fromID NodeID, pkg string, nodeMap map[NodeID]struct{}) []DependencyInfo {
+func (e *SignatureDependencyExtractor) extractFromParams(params []FieldInfo, fromID types.NodeID, pkg string, nodeMap map[types.NodeID]struct{}) []DependencyInfo {
 	var dependencies []DependencyInfo
 	for _, param := range params {
 		if toID := e.parseTypeToNodeID(param.Type, pkg); toID != "" {
@@ -144,7 +124,7 @@ func (e *SignatureDependencyExtractor) extractFromParams(params []FieldInfo, fro
 				dependencies = append(dependencies, DependencyInfo{
 					From: fromID,
 					To:   toID,
-					Type: SignatureDependency,
+					Type: types.SignatureDependency,
 				})
 			}
 		}
@@ -154,12 +134,12 @@ func (e *SignatureDependencyExtractor) extractFromParams(params []FieldInfo, fro
 
 // parseTypeToNodeID は型名からノードIDを生成します。
 // FieldDependencyExtractorの同名メソッドと同じロジックで型名を解析します。
-func (e *SignatureDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeID {
+func (e *SignatureDependencyExtractor) parseTypeToNodeID(typeName, pkg string) types.NodeID {
 	cleaned := strings.TrimLeft(typeName, "*[]")
 	if cleaned == "" || strings.Contains(cleaned, "map[") {
 		return ""
 	}
-	return NodeID(pkg + "." + cleaned)
+	return types.NewNodeID(pkg, cleaned)
 }
 
 
@@ -177,14 +157,14 @@ func (e *BodyCallDependencyExtractor) Extract(result *Result) []DependencyInfo {
 
 	// 関数本体の依存関係抽出
 	for _, f := range result.Functions {
-		fromID := NodeID(f.Package + "." + f.Name)
+		fromID := types.NewNodeID(f.Package, f.Name)
 		for _, called := range f.BodyCalls {
-			toID := NodeID(f.Package + "." + called)
+			toID := types.NewNodeID(f.Package, called)
 			if _, ok := nodeMap[toID]; ok {
 				dependencies = append(dependencies, DependencyInfo{
 					From: fromID,
 					To:   toID,
-					Type: BodyCallDependency,
+					Type: types.BodyCallDependency,
 				})
 			}
 		}
@@ -193,14 +173,14 @@ func (e *BodyCallDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	// メソッド本体の依存関係抽出
 	for _, s := range result.Structs {
 		for _, m := range s.Methods {
-			fromID := NodeID(s.Package + "." + m.Name)
+			fromID := types.NewNodeID(s.Package, m.Name)
 			for _, called := range m.BodyCalls {
-				toID := NodeID(s.Package + "." + called)
+				toID := types.NewNodeID(s.Package, called)
 				if _, ok := nodeMap[toID]; ok {
 					dependencies = append(dependencies, DependencyInfo{
 						From: fromID,
 						To:   toID,
-						Type: BodyCallDependency,
+						Type: types.BodyCallDependency,
 					})
 				}
 			}
@@ -242,21 +222,21 @@ func (e *PackageDependencyExtractor) Extract(result *Result) []DependencyInfo {
 
 	// パッケージ間の依存関係を抽出
 	for _, pkg := range result.Packages {
-		fromID := NodeID("package:" + pkg.Name)
+		fromID := types.NewPackageNodeID(pkg.Name)
 
 		for _, imp := range pkg.Imports {
 			// 同リポジトリ内のパッケージかどうかを判定
 			if utils.IsLocalPackage(imp.Path) {
 				// パッケージ名を抽出（パスの最後の部分）
 				targetPkgName := utils.ExtractPackageName(imp.Path)
-				toID := NodeID("package:" + targetPkgName)
+				toID := types.NewPackageNodeID(targetPkgName)
 
 				// 依存先パッケージが存在する場合のみエッジを追加
 				if _, ok := packageNodes[targetPkgName]; ok {
 					dependencies = append(dependencies, DependencyInfo{
 						From: fromID,
 						To:   toID,
-						Type: PackageDependency,
+						Type: types.PackageDependency,
 					})
 					logger.Debug("パッケージ間依存関係追加", "from", fromID, "to", toID, "import", imp.Path)
 				}
@@ -304,14 +284,14 @@ func (e *CrossPackageDependencyExtractor) Extract(result *Result) []DependencyIn
 
 	// 関数の本体から他パッケージの関数呼び出しを抽出
 	for _, f := range result.Functions {
-		fromID := NodeID(f.Package + "." + f.Name)
+		fromID := types.NewNodeID(f.Package, f.Name)
 		dependencies = append(dependencies, e.extractCrossPackageCalls(f.BodyCalls, f.Package, packageImports, fromID, nodeMap)...)
 	}
 
 	// メソッドの本体から他パッケージの関数呼び出しを抽出
 	for _, s := range result.Structs {
 		for _, m := range s.Methods {
-			fromID := NodeID(s.Package + "." + m.Name)
+			fromID := types.NewNodeID(s.Package, m.Name)
 			dependencies = append(dependencies, e.extractCrossPackageCalls(m.BodyCalls, s.Package, packageImports, fromID, nodeMap)...)
 		}
 	}
@@ -322,7 +302,7 @@ func (e *CrossPackageDependencyExtractor) Extract(result *Result) []DependencyIn
 // extractCrossPackageCalls は関数本体の呼び出しからパッケージ間依存を抽出します。
 // パッケージ修飾子付きの呼び出しを検出し、import情報と照合して
 // 同リポジトリ内の他パッケージへの依存関係を特定します。
-func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []string, currentPkg string, packageImports map[string]map[string]string, fromID NodeID, nodeMap map[NodeID]struct{}) []DependencyInfo {
+func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []string, currentPkg string, packageImports map[string]map[string]string, fromID types.NodeID, nodeMap map[types.NodeID]struct{}) []DependencyInfo {
 	var dependencies []DependencyInfo
 	imports := packageImports[currentPkg]
 	if imports == nil {
@@ -342,14 +322,14 @@ func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []s
 					// 同リポジトリ内のパッケージかどうかを判定
 					if utils.IsLocalPackage(importPath) {
 						targetPkgName := utils.ExtractPackageName(importPath)
-						toID := NodeID(targetPkgName + "." + funcOrTypeName)
+						toID := types.NewNodeID(targetPkgName, funcOrTypeName)
 
 						// 依存先ノードが存在する場合のみエッジを追加
 						if _, ok := nodeMap[toID]; ok {
 							dependencies = append(dependencies, DependencyInfo{
 								From: fromID,
 								To:   toID,
-								Type: CrossPackageDependency,
+								Type: types.CrossPackageDependency,
 							})
 							logger.Debug("パッケージ間関数呼び出し依存関係追加", "from", fromID, "to", toID, "call", call)
 						} else {

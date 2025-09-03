@@ -3,6 +3,7 @@ package graph
 import (
 	"github.com/harakeishi/depsee/internal/analyzer"
 	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/harakeishi/depsee/internal/types"
 )
 
 type NodeKind int
@@ -14,30 +15,28 @@ const (
 	NodePackage
 )
 
-type NodeID string // 例: "package.StructName"
-
 type Node struct {
-	ID      NodeID
+	ID      types.NodeID
 	Kind    NodeKind
 	Name    string
 	Package string
 }
 
 type Edge struct {
-	From NodeID
-	To   NodeID
+	From types.NodeID
+	To   types.NodeID
 	// 依存の種類（フィールド/シグネチャ/本体/実装）も必要に応じて
 }
 
 type DependencyGraph struct {
-	Nodes map[NodeID]*Node
-	Edges map[NodeID]map[NodeID]struct{} // From→Toの多重辺排除
+	Nodes map[types.NodeID]*Node
+	Edges map[types.NodeID]map[types.NodeID]struct{} // From→Toの多重辺排除
 }
 
 func NewDependencyGraph() *DependencyGraph {
 	return &DependencyGraph{
-		Nodes: make(map[NodeID]*Node),
-		Edges: make(map[NodeID]map[NodeID]struct{}),
+		Nodes: make(map[types.NodeID]*Node),
+		Edges: make(map[types.NodeID]map[types.NodeID]struct{}),
 	}
 }
 
@@ -45,9 +44,9 @@ func (g *DependencyGraph) AddNode(node *Node) {
 	g.Nodes[node.ID] = node
 }
 
-func (g *DependencyGraph) AddEdge(from, to NodeID) {
+func (g *DependencyGraph) AddEdge(from, to types.NodeID) {
 	if g.Edges[from] == nil {
-		g.Edges[from] = make(map[NodeID]struct{})
+		g.Edges[from] = make(map[types.NodeID]struct{})
 	}
 	g.Edges[from][to] = struct{}{}
 }
@@ -63,7 +62,7 @@ func BuildDependencyGraph(result *analyzer.Result) *DependencyGraph {
 
 	// 依存関係情報からエッジを構築
 	for _, dep := range result.Dependencies {
-		g.AddEdge(NodeID(dep.From), NodeID(dep.To))
+		g.AddEdge(dep.From, dep.To)
 	}
 
 	logger.Info("依存グラフ構築完了", "nodes", len(g.Nodes), "edges", countEdges(g))
@@ -81,7 +80,7 @@ func BuildDependencyGraphWithPackages(result *analyzer.Result, targetDir string)
 
 	// パッケージノードを追加
 	for _, pkg := range result.Packages {
-		nodeID := NodeID("package:" + pkg.Name)
+		nodeID := types.NewPackageNodeID(pkg.Name)
 		node := &Node{
 			ID:      nodeID,
 			Kind:    NodePackage,
@@ -93,7 +92,7 @@ func BuildDependencyGraphWithPackages(result *analyzer.Result, targetDir string)
 
 	// 依存関係情報からエッジを構築
 	for _, dep := range result.Dependencies {
-		g.AddEdge(NodeID(dep.From), NodeID(dep.To))
+		g.AddEdge(dep.From, dep.To)
 	}
 
 	logger.Info("パッケージ間依存関係を含む依存グラフ構築完了", "nodes", len(g.Nodes), "edges", countEdges(g))
@@ -113,7 +112,7 @@ func countEdges(g *DependencyGraph) int {
 func registerNodes(result *analyzer.Result, g *DependencyGraph) {
 	// 構造体ノード登録
 	for _, s := range result.Structs {
-		id := NodeID(s.Package + "." + s.Name)
+		id := types.NewNodeID(s.Package, s.Name)
 		node := &Node{
 			ID:      id,
 			Kind:    NodeStruct,
@@ -125,7 +124,7 @@ func registerNodes(result *analyzer.Result, g *DependencyGraph) {
 
 	// インターフェースノード登録
 	for _, i := range result.Interfaces {
-		id := NodeID(i.Package + "." + i.Name)
+		id := types.NewNodeID(i.Package, i.Name)
 		node := &Node{
 			ID:      id,
 			Kind:    NodeInterface,
@@ -137,7 +136,7 @@ func registerNodes(result *analyzer.Result, g *DependencyGraph) {
 
 	// 関数ノード登録
 	for _, f := range result.Functions {
-		id := NodeID(f.Package + "." + f.Name)
+		id := types.NewNodeID(f.Package, f.Name)
 		node := &Node{
 			ID:      id,
 			Kind:    NodeFunc,
