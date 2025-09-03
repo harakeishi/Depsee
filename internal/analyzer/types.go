@@ -8,37 +8,37 @@ import "go/token"
 // 構造体の基本情報（名前、パッケージ、ファイル位置等）とフィールド、
 // およびメソッドの情報を含みます。
 type StructInfo struct {
-	Name     string          // 構造体名
-	Package  string          // 所属パッケージ名
-	File     string          // 定義されているファイルパス
-	Position token.Position  // ファイル内での位置情報
-	Fields   []FieldInfo     // 構造体が持つフィールドの一覧
-	Methods  []FuncInfo      // 構造体に関連付けられたメソッドの一覧
+	Name     string         // 構造体名
+	Package  string         // 所属パッケージ名
+	File     string         // 定義されているファイルパス
+	Position token.Position // ファイル内での位置情報
+	Fields   []FieldInfo    // 構造体が持つフィールドの一覧
+	Methods  []FuncInfo     // 構造体に関連付けられたメソッドの一覧
 }
 
 // InterfaceInfo はインターフェースの情報を表します。
 // インターフェースの基本情報（名前、パッケージ、ファイル位置等）と
 // 定義されているメソッドの情報を含みます。
 type InterfaceInfo struct {
-	Name     string          // インターフェース名
-	Package  string          // 所属パッケージ名
-	File     string          // 定義されているファイルパス
-	Position token.Position  // ファイル内での位置情報
-	Methods  []FuncInfo      // インターフェースで定義されているメソッドの一覧
+	Name     string         // インターフェース名
+	Package  string         // 所属パッケージ名
+	File     string         // 定義されているファイルパス
+	Position token.Position // ファイル内での位置情報
+	Methods  []FuncInfo     // インターフェースで定義されているメソッドの一覧
 }
 
 // FuncInfo は関数・メソッドの情報を表します。
 // 関数の基本情報（名前、パッケージ、ファイル位置等）とシグネチャ、
 // および関数本体での呼び出し情報を含みます。
 type FuncInfo struct {
-	Name      string          // 関数・メソッド名
-	Package   string          // 所属パッケージ名
-	File      string          // 定義されているファイルパス
-	Position  token.Position  // ファイル内での位置情報
-	Receiver  string          // レシーバ型名（メソッドの場合のみ設定される）
-	Params    []FieldInfo     // 引数の一覧
-	Results   []FieldInfo     // 戻り値の一覧
-	BodyCalls []string        // 関数本体内で呼び出している関数名の一覧
+	Name      string         // 関数・メソッド名
+	Package   string         // 所属パッケージ名
+	File      string         // 定義されているファイルパス
+	Position  token.Position // ファイル内での位置情報
+	Receiver  string         // レシーバ型名（メソッドの場合のみ設定される）
+	Params    []FieldInfo    // 引数の一覧
+	Results   []FieldInfo    // 戻り値の一覧
+	BodyCalls []string       // 関数本体内で呼び出している関数名の一覧
 }
 
 // FieldInfo はフィールドの情報を表します。
@@ -48,15 +48,43 @@ type FieldInfo struct {
 	Type string // フィールドの型名
 }
 
+// CreateNodeMap は解析結果から全ノードの存在チェック用マップを作成します。
+// 構造体、インターフェース、関数の全てのノードIDを登録し、
+// 依存先ノードの存在確認に使用されます。
+// このメソッドは主に依存関係抽出で使用されます。
+func (r *Result) CreateNodeMap() map[NodeID]struct{} {
+	nodeMap := make(map[NodeID]struct{})
+
+	// 構造体ノード登録
+	for _, s := range r.Structs {
+		id := NodeID(s.Package + "." + s.Name)
+		nodeMap[id] = struct{}{}
+	}
+
+	// インターフェースノード登録
+	for _, i := range r.Interfaces {
+		id := NodeID(i.Package + "." + i.Name)
+		nodeMap[id] = struct{}{}
+	}
+
+	// 関数ノード登録
+	for _, f := range r.Functions {
+		id := NodeID(f.Package + "." + f.Name)
+		nodeMap[id] = struct{}{}
+	}
+
+	return nodeMap
+}
+
 // PackageInfo はパッケージの情報を表します。
 // パッケージの基本情報（名前、パス、ファイル位置等）と
 // import文の情報を含みます。
 type PackageInfo struct {
-	Name     string          // パッケージ名
-	Path     string          // パッケージパス（現在未使用）
-	File     string          // パッケージ宣言があるファイルパス
-	Position token.Position  // ファイル内での位置情報
-	Imports  []ImportInfo    // パッケージがimportしているパッケージの一覧
+	Name     string         // パッケージ名
+	Path     string         // パッケージパス（現在未使用）
+	File     string         // パッケージ宣言があるファイルパス
+	Position token.Position // ファイル内での位置情報
+	Imports  []ImportInfo   // パッケージがimportしているパッケージの一覧
 }
 
 // ImportInfo はimport文の情報を表します。

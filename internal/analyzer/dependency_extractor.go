@@ -10,8 +10,8 @@ import (
 // DependencyInfo は依存関係情報を表す構造体です。
 // 依存元ノード、依存先ノード、依存関係の種類を定義します。
 type DependencyInfo struct {
-	From NodeID        // 依存元のノードID
-	To   NodeID        // 依存先のノードID
+	From NodeID         // 依存元のノードID
+	To   NodeID         // 依存先のノードID
 	Type DependencyType // 依存関係の種類
 }
 
@@ -65,7 +65,7 @@ func (e *FieldDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	var dependencies []DependencyInfo
 
 	// ノードマップを作成（依存先の存在確認用）
-	nodeMap := e.createNodeMap(result)
+	nodeMap := result.CreateNodeMap()
 
 	for _, s := range result.Structs {
 		fromID := NodeID(s.Package + "." + s.Name)
@@ -102,32 +102,6 @@ func (e *FieldDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeI
 	return NodeID(pkg + "." + cleaned)
 }
 
-// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
-// 構造体、インターフェース、関数の全てのノードIDを登録し、
-// 依存先ノードの存在確認に使用します。
-func (e *FieldDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
-	nodeMap := make(map[NodeID]struct{})
-	
-	// 構造体ノード登録
-	for _, s := range result.Structs {
-		id := NodeID(s.Package + "." + s.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	// インターフェースノード登録
-	for _, i := range result.Interfaces {
-		id := NodeID(i.Package + "." + i.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	// 関数ノード登録
-	for _, f := range result.Functions {
-		id := NodeID(f.Package + "." + f.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	return nodeMap
-}
 
 // SignatureDependencyExtractor は関数シグネチャの依存関係を抽出する実装です。
 // 関数やメソッドの引数や戻り値の型が他の型を参照している場合の
@@ -139,7 +113,7 @@ type SignatureDependencyExtractor struct{}
 // 依存関係情報を作成します。
 func (e *SignatureDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	var dependencies []DependencyInfo
-	nodeMap := e.createNodeMap(result)
+	nodeMap := result.CreateNodeMap()
 
 	// 関数の引数・戻り値の依存関係抽出
 	for _, f := range result.Functions {
@@ -188,28 +162,6 @@ func (e *SignatureDependencyExtractor) parseTypeToNodeID(typeName, pkg string) N
 	return NodeID(pkg + "." + cleaned)
 }
 
-// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
-// FieldDependencyExtractorの同名メソッドと同じロジックでノードマップを作成します。
-func (e *SignatureDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
-	nodeMap := make(map[NodeID]struct{})
-	
-	for _, s := range result.Structs {
-		id := NodeID(s.Package + "." + s.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	for _, i := range result.Interfaces {
-		id := NodeID(i.Package + "." + i.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	for _, f := range result.Functions {
-		id := NodeID(f.Package + "." + f.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	return nodeMap
-}
 
 // BodyCallDependencyExtractor は関数本体の呼び出し依存関係を抽出する実装です。
 // 関数やメソッドの本体内で他の関数や構造体を呼び出している場合の
@@ -221,7 +173,7 @@ type BodyCallDependencyExtractor struct{}
 // 検出して依存関係情報を作成します。
 func (e *BodyCallDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	var dependencies []DependencyInfo
-	nodeMap := e.createNodeMap(result)
+	nodeMap := result.CreateNodeMap()
 
 	// 関数本体の依存関係抽出
 	for _, f := range result.Functions {
@@ -258,28 +210,6 @@ func (e *BodyCallDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	return dependencies
 }
 
-// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
-// 他のエクストラクタの同名メソッドと同じロジックでノードマップを作成します。
-func (e *BodyCallDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
-	nodeMap := make(map[NodeID]struct{})
-	
-	for _, s := range result.Structs {
-		id := NodeID(s.Package + "." + s.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	for _, i := range result.Interfaces {
-		id := NodeID(i.Package + "." + i.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	for _, f := range result.Functions {
-		id := NodeID(f.Package + "." + f.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	return nodeMap
-}
 
 // PackageDependencyExtractor はパッケージ間の依存関係を抽出する実装です。
 // import文に基づいてパッケージ間の依存関係を検出します。
@@ -358,7 +288,7 @@ func NewCrossPackageDependencyExtractor() *CrossPackageDependencyExtractor {
 func (e *CrossPackageDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	logger.Debug("パッケージ間関数呼び出し依存関係抽出開始")
 	var dependencies []DependencyInfo
-	nodeMap := e.createNodeMap(result)
+	nodeMap := result.CreateNodeMap()
 
 	// パッケージごとのimport情報を構築（同じパッケージの複数ファイルをマージ）
 	packageImports := make(map[string]map[string]string) // package -> (alias -> import_path)
@@ -445,25 +375,3 @@ func (e *CrossPackageDependencyExtractor) extractPackageAlias(importPath, alias 
 	return utils.ExtractPackageName(importPath)
 }
 
-// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
-// 他のエクストラクタの同名メソッドと同じロジックでノードマップを作成します。
-func (e *CrossPackageDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
-	nodeMap := make(map[NodeID]struct{})
-	
-	for _, s := range result.Structs {
-		id := NodeID(s.Package + "." + s.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	for _, i := range result.Interfaces {
-		id := NodeID(i.Package + "." + i.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	for _, f := range result.Functions {
-		id := NodeID(f.Package + "." + f.Name)
-		nodeMap[id] = struct{}{}
-	}
-
-	return nodeMap
-}

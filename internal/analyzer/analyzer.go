@@ -48,9 +48,17 @@ func New() Analyzer {
 	return &GoAnalyzer{}
 }
 
+// NewWithFilters はフィルタを指定してGoAnalyzerインスタンスを作成します。
+// 解析対象をフィルタリングする条件を初期化時に設定できます。
+func NewWithFilters(filters Filters) Analyzer {
+	return &GoAnalyzer{
+		Filters: filters,
+	}
+}
+
 // SetFilters は解析時に適用するフィルタを設定します。
 // 対象パッケージの限定や除外パッケージ・ディレクトリの指定が可能です。
-// TODO: 将来的にはコンストラクタで設定する形に変更を検討
+// NOTE: NewWithFiltersでの初期化も可能です。
 func (ga *GoAnalyzer) SetFilters(filters Filters) {
 	ga.Filters = filters
 }

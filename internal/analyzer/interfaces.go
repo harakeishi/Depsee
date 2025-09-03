@@ -7,15 +7,15 @@ type Analyzer interface {
 	// SetFilters は解析時に適用するフィルタを設定します。
 	// 対象パッケージの指定や除外パッケージ・ディレクトリの設定が可能です。
 	SetFilters(filters Filters)
-	
+
 	// ListTartgetFiles は指定されたディレクトリから解析対象のGoファイルをリストアップします。
 	// 設定されたフィルタに基づいて対象ファイルを決定します。
 	ListTartgetFiles(dir string) error
-	
+
 	// Analyze は実際のコード解析を実行します。
 	// 構造体、インターフェース、関数の抽出と依存関係の分析を行います。
 	Analyze() error
-	
+
 	// ExportResult は解析結果を取得します。
 	// 解析で得られた全ての情報を含むResultオブジェクトを返します。
 	ExportResult() *Result
