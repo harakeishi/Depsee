@@ -7,44 +7,59 @@ import (
 	"github.com/harakeishi/depsee/internal/utils"
 )
 
-// DependencyInfo は依存関係情報を表す
+// DependencyInfo は依存関係情報を表す構造体です。
+// 依存元ノード、依存先ノード、依存関係の種類を定義します。
 type DependencyInfo struct {
-	From NodeID
-	To   NodeID
-	Type DependencyType
+	From NodeID        // 依存元のノードID
+	To   NodeID        // 依存先のノードID
+	Type DependencyType // 依存関係の種類
 }
 
-// NodeID はノードの一意識別子
+// NodeID はノードの一意識別子です。
+// 「package.Name」形式で構造体、インターフェース、関数を一意に識別します。
 type NodeID string
 
-// DependencyType は依存関係の種類
+// DependencyType は依存関係の種類を表す列挙型です。
+// フィールド、シグネチャ、関数呼び出し、パッケージ間依存等を区別します。
 type DependencyType int
 
 const (
+	// FieldDependency は構造体のフィールドによる依存関係です
 	FieldDependency DependencyType = iota
+	// SignatureDependency は関数・メソッドのシグネチャ（引数・戻り値）による依存関係です
 	SignatureDependency
+	// BodyCallDependency は関数本体内の呼び出しによる依存関係です
 	BodyCallDependency
+	// CrossPackageDependency はパッケージ間の関数呼び出しや型使用による依存関係です
 	CrossPackageDependency
+	// PackageDependency はimport文によるパッケージ間依存関係です
 	PackageDependency
 )
 
-// DependencyExtractor は依存関係抽出の戦略インターフェース
+// DependencyExtractor は依存関係抽出の戦略インターフェースです。
+// Strategyパターンを使用して、異なる種類の依存関係抽出ロジックを実装します。
 type DependencyExtractor interface {
+	// Extract は解析結果から特定の種類の依存関係を抽出します
 	Extract(result *Result) []DependencyInfo
 }
 
-// FieldDependencyExtractor は構造体フィールドの依存関係を抽出
+// FieldDependencyExtractor は構造体フィールドの依存関係を抽出する実装です。
+// 構造体のフィールドが他の型を参照している場合の依存関係を検出します。
 type FieldDependencyExtractor struct {
-	typeResolver *TypeResolver
+	typeResolver *TypeResolver // 型情報の解決に使用するリゾルバ
 }
 
-// NewFieldDependencyExtractor は新しいFieldDependencyExtractorを作成
+// NewFieldDependencyExtractor は新しいFieldDependencyExtractorを作成します。
+// 型解決に使用するTypeResolverを指定してインスタンスを初期化します。
 func NewFieldDependencyExtractor(typeResolver *TypeResolver) *FieldDependencyExtractor {
 	return &FieldDependencyExtractor{
 		typeResolver: typeResolver,
 	}
 }
 
+// Extract は構造体のフィールドによる依存関係を抽出します。
+// 各構造体のフィールドを調べ、他の型を参照しているフィールドがある場合に
+// 依存関係情報を作成します。
 func (e *FieldDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	logger.Debug("フィールド依存関係抽出開始")
 	var dependencies []DependencyInfo
@@ -75,6 +90,9 @@ func (e *FieldDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	return dependencies
 }
 
+// parseTypeToNodeID は型名からノードIDを生成します。
+// ポインタやスライスのプレフィックスを取り除き、パッケージ名と結合して
+// 一意のノードIDを生成します。
 func (e *FieldDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeID {
 	// より安全な型解析ロジック
 	cleaned := strings.TrimLeft(typeName, "*[]")
@@ -84,6 +102,9 @@ func (e *FieldDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeI
 	return NodeID(pkg + "." + cleaned)
 }
 
+// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
+// 構造体、インターフェース、関数の全てのノードIDを登録し、
+// 依存先ノードの存在確認に使用します。
 func (e *FieldDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
 	nodeMap := make(map[NodeID]struct{})
 	
@@ -108,9 +129,14 @@ func (e *FieldDependencyExtractor) createNodeMap(result *Result) map[NodeID]stru
 	return nodeMap
 }
 
-// SignatureDependencyExtractor は関数シグネチャの依存関係を抽出
+// SignatureDependencyExtractor は関数シグネチャの依存関係を抽出する実装です。
+// 関数やメソッドの引数や戻り値の型が他の型を参照している場合の
+// 依存関係を検出します。
 type SignatureDependencyExtractor struct{}
 
+// Extract は関数・メソッドのシグネチャによる依存関係を抽出します。
+// 引数や戻り値の型を調べ、他の型を参照している場合に
+// 依存関係情報を作成します。
 func (e *SignatureDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	var dependencies []DependencyInfo
 	nodeMap := e.createNodeMap(result)
@@ -134,6 +160,8 @@ func (e *SignatureDependencyExtractor) Extract(result *Result) []DependencyInfo 
 	return dependencies
 }
 
+// extractFromParams はパラメータ一覧から依存関係を抽出します。
+// 各パラメータの型を解析し、他のノードへの依存関係を検出します。
 func (e *SignatureDependencyExtractor) extractFromParams(params []FieldInfo, fromID NodeID, pkg string, nodeMap map[NodeID]struct{}) []DependencyInfo {
 	var dependencies []DependencyInfo
 	for _, param := range params {
@@ -150,6 +178,8 @@ func (e *SignatureDependencyExtractor) extractFromParams(params []FieldInfo, fro
 	return dependencies
 }
 
+// parseTypeToNodeID は型名からノードIDを生成します。
+// FieldDependencyExtractorの同名メソッドと同じロジックで型名を解析します。
 func (e *SignatureDependencyExtractor) parseTypeToNodeID(typeName, pkg string) NodeID {
 	cleaned := strings.TrimLeft(typeName, "*[]")
 	if cleaned == "" || strings.Contains(cleaned, "map[") {
@@ -158,6 +188,8 @@ func (e *SignatureDependencyExtractor) parseTypeToNodeID(typeName, pkg string) N
 	return NodeID(pkg + "." + cleaned)
 }
 
+// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
+// FieldDependencyExtractorの同名メソッドと同じロジックでノードマップを作成します。
 func (e *SignatureDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
 	nodeMap := make(map[NodeID]struct{})
 	
@@ -179,9 +211,14 @@ func (e *SignatureDependencyExtractor) createNodeMap(result *Result) map[NodeID]
 	return nodeMap
 }
 
-// BodyCallDependencyExtractor は関数本体の呼び出し依存関係を抽出
+// BodyCallDependencyExtractor は関数本体の呼び出し依存関係を抽出する実装です。
+// 関数やメソッドの本体内で他の関数や構造体を呼び出している場合の
+// 依存関係を検出します。
 type BodyCallDependencyExtractor struct{}
 
+// Extract は関数・メソッド本体の呼び出しによる依存関係を抽出します。
+// 関数やメソッドの本体で使用されている他の関数や型への呼び出しを
+// 検出して依存関係情報を作成します。
 func (e *BodyCallDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	var dependencies []DependencyInfo
 	nodeMap := e.createNodeMap(result)
@@ -221,6 +258,8 @@ func (e *BodyCallDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	return dependencies
 }
 
+// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
+// 他のエクストラクタの同名メソッドと同じロジックでノードマップを作成します。
 func (e *BodyCallDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
 	nodeMap := make(map[NodeID]struct{})
 	
@@ -242,18 +281,24 @@ func (e *BodyCallDependencyExtractor) createNodeMap(result *Result) map[NodeID]s
 	return nodeMap
 }
 
-// PackageDependencyExtractor はパッケージ間の依存関係を抽出
+// PackageDependencyExtractor はパッケージ間の依存関係を抽出する実装です。
+// import文に基づいてパッケージ間の依存関係を検出します。
+// 同リポジトリ内のパッケージ間依存のみを対象とします。
 type PackageDependencyExtractor struct {
-	targetDir string // 解析対象のルートディレクトリ
+	targetDir string // 解析対象のルートディレクトリパス
 }
 
-// NewPackageDependencyExtractor は新しいPackageDependencyExtractorを作成
+// NewPackageDependencyExtractor は新しいPackageDependencyExtractorを作成します。
+// 解析対象のルートディレクトリを指定してインスタンスを初期化します。
 func NewPackageDependencyExtractor(targetDir string) *PackageDependencyExtractor {
 	return &PackageDependencyExtractor{
 		targetDir: targetDir,
 	}
 }
 
+// Extract はimport文に基づいたパッケージ間依存関係を抽出します。
+// 各パッケージのimport文を調べ、同リポジトリ内の他パッケージを参照している場合に
+// パッケージ間依存関係情報を作成します。
 func (e *PackageDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	logger.Debug("パッケージ間依存関係抽出開始")
 	var dependencies []DependencyInfo
@@ -292,18 +337,24 @@ func (e *PackageDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	return dependencies
 }
 
-// CrossPackageDependencyExtractor はパッケージ間の関数呼び出しや型の使用を抽出
+// CrossPackageDependencyExtractor はパッケージ間の関数呼び出しや型の使用を抽出する実装です。
+// import文で取り込まれたパッケージの関数や型を使用している箇所を検出し、
+// パッケージ間の具体的な依存関係を分析します。
 type CrossPackageDependencyExtractor struct {
-	packageMap map[string]string // import alias -> package name のマッピング
+	packageMap map[string]string // importエイリアスからパッケージ名へのマッピング（未使用）
 }
 
-// NewCrossPackageDependencyExtractor は新しいCrossPackageDependencyExtractorを作成
+// NewCrossPackageDependencyExtractor は新しいCrossPackageDependencyExtractorを作成します。
+// パッケージ間の関数呼び出しや型使用の分析に必要な内部状態を初期化します。
 func NewCrossPackageDependencyExtractor() *CrossPackageDependencyExtractor {
 	return &CrossPackageDependencyExtractor{
 		packageMap: make(map[string]string),
 	}
 }
 
+// Extract はパッケージ間の関数呼び出しや型使用による依存関係を抽出します。
+// 関数やメソッドの本体で使用されている他パッケージの関数や型を検出し、
+// 具体的なパッケージ間依存関係情報を作成します。
 func (e *CrossPackageDependencyExtractor) Extract(result *Result) []DependencyInfo {
 	logger.Debug("パッケージ間関数呼び出し依存関係抽出開始")
 	var dependencies []DependencyInfo
@@ -338,6 +389,9 @@ func (e *CrossPackageDependencyExtractor) Extract(result *Result) []DependencyIn
 	return dependencies
 }
 
+// extractCrossPackageCalls は関数本体の呼び出しからパッケージ間依存を抽出します。
+// パッケージ修飾子付きの呼び出しを検出し、import情報と照合して
+// 同リポジトリ内の他パッケージへの依存関係を特定します。
 func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []string, currentPkg string, packageImports map[string]map[string]string, fromID NodeID, nodeMap map[NodeID]struct{}) []DependencyInfo {
 	var dependencies []DependencyInfo
 	imports := packageImports[currentPkg]
@@ -380,6 +434,9 @@ func (e *CrossPackageDependencyExtractor) extractCrossPackageCalls(bodyCalls []s
 	return dependencies
 }
 
+// extractPackageAlias はimport文からパッケージのエイリアスを抽出します。
+// エイリアスが明示的に指定されている場合はそれを使用し、
+// 指定されていない場合はimportパスからパッケージ名を抽出します。
 func (e *CrossPackageDependencyExtractor) extractPackageAlias(importPath, alias string) string {
 	if alias != "" {
 		return alias // "."や"_"も含めて、指定されたエイリアスをそのまま返す
@@ -388,6 +445,8 @@ func (e *CrossPackageDependencyExtractor) extractPackageAlias(importPath, alias 
 	return utils.ExtractPackageName(importPath)
 }
 
+// createNodeMap は解析結果からノードの存在チェック用のマップを作成します。
+// 他のエクストラクタの同名メソッドと同じロジックでノードマップを作成します。
 func (e *CrossPackageDependencyExtractor) createNodeMap(result *Result) map[NodeID]struct{} {
 	nodeMap := make(map[NodeID]struct{})
 	

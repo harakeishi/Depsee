@@ -14,45 +14,57 @@ import (
 	"github.com/harakeishi/depsee/internal/logger"
 )
 
+// Result は解析結果を格納する構造体です。
+// 解析で抽出された構造体、インターフェース、関数、パッケージの情報と
+// それらの間の依存関係情報を含みます。
 type Result struct {
-	Structs      []StructInfo
-	Interfaces   []InterfaceInfo
-	Functions    []FuncInfo
-	Packages     []PackageInfo
-	Dependencies []DependencyInfo
+	Structs      []StructInfo     // 抽出された構造体の一覧
+	Interfaces   []InterfaceInfo  // 抽出されたインターフェースの一覧
+	Functions    []FuncInfo       // 抽出された関数の一覧
+	Packages     []PackageInfo    // 解析対象パッケージの一覧
+	Dependencies []DependencyInfo // 抽出された依存関係の一覧
 }
 
+// Filters は解析対象をフィルタリングするための条件を定義する構造体です。
+// 特定のパッケージのみを対象にしたり、特定のパッケージやディレクトリを除外したりできます。
 type Filters struct {
-	TargetPackages  []string // 解析対象のパッケージ
-	ExcludePackages []string // 除外するパッケージ
-	ExcludeDirs     []string // 除外するディレクトリ
+	TargetPackages  []string // 解析対象のパッケージ名一覧（指定時はこれらのみが対象となる）
+	ExcludePackages []string // 解析から除外するパッケージ名一覧
+	ExcludeDirs     []string // 解析から除外するディレクトリパス一覧
 }
 
-// GoAnalyzer はGo言語の静的解析を行う具象実装
+// GoAnalyzer はGo言語の静的解析を行う具象実装です。
+// Analyzerインターフェースを実装し、Go言語のソースコードから
+// 構造体、インターフェース、関数の情報と依存関係を抽出します。
 type GoAnalyzer struct {
-	// 将来的に設定やオプションを追加可能
-	Filters   Filters  // 解析フィルタ
-	filesPath []string // 解析対象のGoファイルパス
-	Result    *Result  // 解析結果
+	Filters   Filters  // 解析に適用するフィルタ条件
+	filesPath []string // 解析対象のGoファイルパス一覧
+	Result    *Result  // 解析結果を格納する構造体
 }
 
-// New は新しいAnalyzerを作成
+// New は新しいGoAnalyzerインスタンスを作成します。
+// Analyzerインターフェースを実装したGoAnalyzerを返します。
 func New() Analyzer {
 	return &GoAnalyzer{}
 }
 
-// SetFilters は解析フィルタを設定する
-// :FIXME: コンストラクタで設定する
+// SetFilters は解析時に適用するフィルタを設定します。
+// 対象パッケージの限定や除外パッケージ・ディレクトリの指定が可能です。
+// TODO: 将来的にはコンストラクタで設定する形に変更を検討
 func (ga *GoAnalyzer) SetFilters(filters Filters) {
 	ga.Filters = filters
 }
 
-// ExportResult は解析結果をエクスポートする
+// ExportResult は解析結果を取得します。
+// 解析で抽出された全ての情報（構造体、インターフェース、関数、依存関係等）を
+// 含むResultオブジェクトを返します。
 func (ga *GoAnalyzer) ExportResult() *Result {
 	return ga.Result
 }
 
-// ListTartgetFiles は解析対象のGoファイルをリストアップする -- new
+// ListTartgetFiles は指定されたディレクトリから解析対象のGoファイルをリストアップします。
+// ディレクトリを再帰的に探索し、設定されたフィルタ条件に基づいて
+// 解析対象となる.goファイル（テストファイル除く）を抽出します。
 func (ga *GoAnalyzer) ListTartgetFiles(dir string) error {
 	ga.filesPath = []string{}
 
@@ -90,7 +102,8 @@ func (ga *GoAnalyzer) ListTartgetFiles(dir string) error {
 	return nil
 }
 
-// shouldIncludeFile はファイルがフィルタに適合するかどうかを判定  -- new
+// shouldIncludeFile は指定されたファイルがフィルタ条件に適合するかどうかを判定します。
+// パッケージ名をパースし、対象パッケージ、除外パッケージ、除外ディレクトリの条件をチェックします。
 func (f Filters) shouldIncludeFile(path string) (bool, error) {
 	fset := token.NewFileSet()
 
@@ -126,7 +139,9 @@ func (f Filters) shouldIncludeFile(path string) (bool, error) {
 	return true, nil
 }
 
-// Analyze は指定ディレクトリ配下のGoファイルを再帰的に探索し、構造体・インターフェース・関数を抽出する
+// Analyze は実際のコード解析を実行します。
+// リストアップされた全ての対象ファイルをパースし、構造体、インターフェース、関数を抽出し、
+// 最終的に依存関係を分析して解析結果を構築します。
 func (ga *GoAnalyzer) Analyze() error {
 	if len(ga.filesPath) == 0 {
 		return errors.NewAnalysisError("解析対象のファイルが存在しません", nil)
@@ -155,7 +170,9 @@ func (ga *GoAnalyzer) Analyze() error {
 	return nil
 }
 
-// extractDependencies は解析結果から依存関係を抽出する
+// extractDependencies は解析結果から依存関係を抽出します。
+// 複数の依存関係抽出戦略（フィールド、シグネチャ、関数呼び出し、パッケージ間）を使用して
+// 包括的な依存関係情報を収集します。
 func (ga *GoAnalyzer) extractDependencies(result *Result) []DependencyInfo {
 	logger.Info("依存関係解析開始")
 
@@ -181,7 +198,9 @@ func (ga *GoAnalyzer) extractDependencies(result *Result) []DependencyInfo {
 	return allDependencies
 }
 
-// extractImports はASTファイルからimport文を解析してImportInfoのスライスを返す
+// extractImports はASTファイルからimport文を解析してImportInfoのスライスを返します。
+// importパスとエイリアス情報を抽出し、エイリアスが指定されていない場合は
+// importパスからパッケージ名を自動抽出します。
 func extractImports(f *ast.File) []ImportInfo {
 	imports := []ImportInfo{}
 	for _, imp := range f.Imports {
@@ -206,7 +225,9 @@ func extractImports(f *ast.File) []ImportInfo {
 	return imports
 }
 
-// extractFunctions はASTファイルから関数・メソッドを解析する
+// extractFunctions はASTファイルから関数・メソッドを解析します。
+// 関数宣言を走査し、関数名、引数、戻り値、レシーバ情報、関数本体の呼び出し情報を抽出します。
+// メソッドの場合は対応する構造体のStructInfoに関連付けられます。
 func extractFunctions(f *ast.File, fset *token.FileSet, file string, pkgName string, structMap map[string]*StructInfo) []FuncInfo {
 	var functions []FuncInfo
 
@@ -274,7 +295,9 @@ func extractFunctions(f *ast.File, fset *token.FileSet, file string, pkgName str
 	return functions
 }
 
-// extractTypes はASTファイルから型宣言（構造体・インターフェース）を解析する
+// extractTypes はASTファイルから型宣言（構造体・インターフェース）を解析します。
+// type宣言を走査し、構造体のフィールド情報やインターフェースのメソッドシグネチャを抽出します。
+// 構造体については後でメソッドを関連付けるためのマップも返します。
 func extractTypes(f *ast.File, fset *token.FileSet, file string, pkgName string) ([]StructInfo, []InterfaceInfo, map[string]*StructInfo) {
 	var structs []StructInfo
 	var interfaces []InterfaceInfo
@@ -333,7 +356,9 @@ func extractTypes(f *ast.File, fset *token.FileSet, file string, pkgName string)
 	return structs, interfaces, structMap
 }
 
-// analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
+// analyzeFile は単一のGoファイルのASTを走査し、構造体・インターフェース・関数・メソッドを抽出します。
+// パッケージ情報、import文、型宣言、関数宣言を順序立てて処理し、
+// 抽出した情報を結果オブジェクトに追加します。
 func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) {
 	pkgName := f.Name.Name
 
@@ -368,7 +393,9 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) 
 	}
 }
 
-// 型表現を文字列化するユーティリティ
+// exprToTypeString はASTの型表現を文字列に変換するユーティリティ関数です。
+// 基本型、ポインタ、セレクタ、配列、マップ、インターフェース等の
+// 型表現を適切な文字列表現に変換します。
 func exprToTypeString(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.Ident:
@@ -388,7 +415,9 @@ func exprToTypeString(expr ast.Expr) string {
 	}
 }
 
-// 関数本体から呼び出している関数名リストを抽出
+// extractBodyCalls は関数本体から呼び出している関数名リストを抽出します。
+// 関数呼び出し、メソッド呼び出し、構造体リテラルの作成等を検出し、
+// 依存関係分析のための呼び出し情報を収集します。
 func extractBodyCalls(body *ast.BlockStmt) []string {
 	calls := []string{}
 	if body == nil {
