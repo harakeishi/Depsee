@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"slices"
@@ -238,7 +240,7 @@ func TestGoAnalyzer_ListTartgetFiles(t *testing.T) {
 				// パスを正規化して比較（順序は問わない）
 				normalizedFilesPath := normalizeAndSortPaths(ga.filesPath)
 				expectedPaths := normalizeAndSortPaths(tt.wantFilesPath)
-				
+
 				if !slices.Equal(normalizedFilesPath, expectedPaths) {
 					t.Errorf("GoAnalyzer.ListTartgetFiles() filesPath = %v, want %v", normalizedFilesPath, expectedPaths)
 				}
@@ -261,4 +263,270 @@ func normalizeAndSortPaths(paths []string) []string {
 	}
 	slices.Sort(normalized)
 	return normalized
+}
+
+func TestFilters_shouldIncludeFile(t *testing.T) {
+	type fields struct {
+		TargetPackages  []string
+		ExcludePackages []string
+		ExcludeDirs     []string
+	}
+	type args struct {
+		path string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    bool
+		wantErr bool
+	}{
+		{
+			name: "shouldIncludeFile_TargetPackageMatch",
+			fields: fields{
+				TargetPackages: []string{"sample"},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_TargetPackageNoMatch",
+			fields: fields{
+				TargetPackages: []string{"nonexistent"},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_MultipleTargetPackages",
+			fields: fields{
+				TargetPackages: []string{"pkg1", "pkg2", "sample"},
+			},
+			args:    args{path: "../../testdata/multi-package/pkg1/models.go"},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_ExcludePackage",
+			fields: fields{
+				TargetPackages:  []string{"sample"},
+				ExcludePackages: []string{"sample"},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_ExcludePackageNoMatch",
+			fields: fields{
+				TargetPackages:  []string{"sample"},
+				ExcludePackages: []string{"other"},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_ExcludeDirectory",
+			fields: fields{
+				TargetPackages: []string{"sample"},
+				ExcludeDirs:    []string{"../../testdata/sample"},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_ExcludeDirectoryNoMatch",
+			fields: fields{
+				TargetPackages: []string{"sample"},
+				ExcludeDirs:    []string{"../../testdata/other"},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_MultipleExcludeDirs",
+			fields: fields{
+				TargetPackages: []string{"pkg1", "pkg2"},
+				ExcludeDirs:    []string{"../../testdata/multi-package/pkg1", "../../testdata/sample"},
+			},
+			args:    args{path: "../../testdata/multi-package/pkg1/models.go"},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_ComplexFilter",
+			fields: fields{
+				TargetPackages:  []string{"pkg1", "pkg2", "sample"},
+				ExcludePackages: []string{"pkg2"},
+				ExcludeDirs:     []string{"../../testdata/sample"},
+			},
+			args:    args{path: "../../testdata/multi-package/pkg1/models.go"},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_ComplexFilterExcluded",
+			fields: fields{
+				TargetPackages:  []string{"pkg1", "pkg2", "sample"},
+				ExcludePackages: []string{"pkg1"},
+				ExcludeDirs:     []string{"../../testdata/sample"},
+			},
+			args:    args{path: "../../testdata/multi-package/pkg1/models.go"},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_NonExistentFile",
+			fields: fields{
+				TargetPackages: []string{"sample"},
+			},
+			args:    args{path: "../../testdata/nonexistent.go"},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "shouldIncludeFile_EmptyTargetPackages",
+			fields: fields{
+				TargetPackages: []string{},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    false,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := Filters{
+				TargetPackages:  tt.fields.TargetPackages,
+				ExcludePackages: tt.fields.ExcludePackages,
+				ExcludeDirs:     tt.fields.ExcludeDirs,
+			}
+			got, err := f.shouldIncludeFile(tt.args.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Filters.shouldIncludeFile() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Filters.shouldIncludeFile() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractImports(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected []ImportInfo
+	}{
+		{
+			name: "extractImports_StandardLibrary",
+			content: `package test
+
+import "fmt"
+
+func main() {}`,
+			expected: []ImportInfo{
+				{Path: "fmt", Alias: "fmt"},
+			},
+		},
+		{
+			name: "extractImports_MultipleImports",
+			content: `package test
+
+import (
+	"fmt"
+	"strings"
+	"os"
+)
+
+func main() {}`,
+			expected: []ImportInfo{
+				{Path: "fmt", Alias: "fmt"},
+				{Path: "strings", Alias: "strings"},
+				{Path: "os", Alias: "os"},
+			},
+		},
+		{
+			name: "extractImports_WithAlias",
+			content: `package test
+
+import (
+	"fmt"
+	str "strings"
+	. "os"
+	_ "log"
+)
+
+func main() {}`,
+			expected: []ImportInfo{
+				{Path: "fmt", Alias: "fmt"},
+				{Path: "strings", Alias: "str"},
+				{Path: "os", Alias: "."},
+				{Path: "log", Alias: "_"},
+			},
+		},
+		{
+			name: "extractImports_ExternalPackages",
+			content: `package test
+
+import (
+	"fmt"
+	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/some/other/package"
+)
+
+func main() {}`,
+			expected: []ImportInfo{
+				{Path: "fmt", Alias: "fmt"},
+				{Path: "github.com/harakeishi/depsee/internal/logger", Alias: "logger"},
+				{Path: "github.com/some/other/package", Alias: "package"},
+			},
+		},
+		{
+			name: "extractImports_NoImports",
+			content: `package test
+
+func main() {}`,
+			expected: []ImportInfo{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// テストコードをパースしてASTを作成
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "test.go", tt.content, parser.ParseComments)
+			if err != nil {
+				t.Fatalf("Failed to parse test content: %v", err)
+			}
+
+			// extractImports関数をテスト
+			result := extractImports(f)
+
+			// 結果の検証
+			if len(result) != len(tt.expected) {
+				t.Errorf("extractImports() returned %d imports, expected %d", len(result), len(tt.expected))
+				return
+			}
+
+			for i, expected := range tt.expected {
+				if i >= len(result) {
+					t.Errorf("extractImports() missing import at index %d", i)
+					continue
+				}
+				if result[i].Path != expected.Path {
+					t.Errorf("extractImports()[%d].Path = %q, expected %q", i, result[i].Path, expected.Path)
+				}
+				if result[i].Alias != expected.Alias {
+					t.Errorf("extractImports()[%d].Alias = %q, expected %q", i, result[i].Alias, expected.Alias)
+				}
+			}
+		})
+	}
 }

@@ -153,12 +153,8 @@ func (ga *GoAnalyzer) Analyze() error {
 	return nil
 }
 
-// analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
-func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) {
-	pkgName := f.Name.Name
-	structMap := map[string]*StructInfo{}
-
-	// 0th pass: import文の解析
+// extractImports はASTファイルからimport文を解析してImportInfoのスライスを返す
+func extractImports(f *ast.File) []ImportInfo {
 	imports := []ImportInfo{}
 	for _, imp := range f.Imports {
 		importPath := strings.Trim(imp.Path.Value, `"`)
@@ -179,6 +175,16 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) 
 			Alias: alias,
 		})
 	}
+	return imports
+}
+
+// analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
+func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) {
+	pkgName := f.Name.Name
+	structMap := map[string]*StructInfo{}
+
+	// 0th pass: import文の解析
+	imports := extractImports(f)
 
 	// パッケージ情報を追加
 	pos := fset.Position(f.Name.Pos())
