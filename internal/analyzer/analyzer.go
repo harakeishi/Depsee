@@ -198,133 +198,30 @@ func (ga *GoAnalyzer) extractDependencies(result *Result, targetDir string) []De
 
 	var allDependencies []DependencyInfo
 
-	// 依存関係抽出（戦略パターンを使用）
-	legacyTypeResolver := &extraction.LegacyTypeResolver{}
-	legacyResult := convertToLegacyResult(result)
+	// 新しいstrategyベース依存関係抽出を使用
+	strategyExtractor := extraction.DefaultStrategyBasedExtractor(targetDir)
 	
-	extractors := []extraction.LegacyDependencyExtractor{
-		extraction.NewLegacyFieldDependencyExtractor(legacyTypeResolver),
-		&extraction.LegacySignatureDependencyExtractor{},
-		&extraction.LegacyBodyCallDependencyExtractor{},
-		extraction.NewLegacyPackageDependencyExtractor(targetDir),
-		extraction.NewLegacyCrossPackageDependencyExtractor(),
+	// 解析済みファイルから依存関係を抽出
+	extractionDeps, err := strategyExtractor.ExtractFromFiles(ga.filesPath)
+	if err != nil {
+		logger.Error("strategy依存関係抽出エラー", "error", err)
+		return allDependencies
 	}
-
-	for _, extractor := range extractors {
-		dependencies := extractor.Extract(legacyResult)
-		for _, dep := range dependencies {
-			allDependencies = append(allDependencies, DependencyInfo{
-				From: dep.From,
-				To:   dep.To,
-				Type: dep.Type,
-			})
-		}
+	
+	// extraction.DependencyInfo を analyzer.DependencyInfo に変換
+	for _, dep := range extractionDeps {
+		allDependencies = append(allDependencies, DependencyInfo{
+			From: dep.From,
+			To:   dep.To,
+			Type: dep.Type,
+		})
 	}
 
 	logger.Info("依存関係解析完了", "total_dependencies", len(allDependencies))
 	return allDependencies
 }
 
-// convertToLegacyResult converts Result to extraction.LegacyResult
-func convertToLegacyResult(result *Result) *extraction.LegacyResult {
-	legacyResult := &extraction.LegacyResult{
-		Structs:    make([]extraction.LegacyStructInfo, len(result.Structs)),
-		Interfaces: make([]extraction.LegacyInterfaceInfo, len(result.Interfaces)),
-		Functions:  make([]extraction.LegacyFuncInfo, len(result.Functions)),
-		Packages:   make([]extraction.LegacyPackageInfo, len(result.Packages)),
-	}
 
-	// Convert structs
-	for i, s := range result.Structs {
-		legacyResult.Structs[i] = extraction.LegacyStructInfo{
-			Name:     s.Name,
-			Package:  s.Package,
-			File:     s.File,
-			Position: s.Position,
-			Fields:   convertToLegacyFields(s.Fields),
-			Methods:  convertToLegacyFuncs(s.Methods),
-		}
-	}
-
-	// Convert interfaces
-	for i, iface := range result.Interfaces {
-		legacyResult.Interfaces[i] = extraction.LegacyInterfaceInfo{
-			Name:     iface.Name,
-			Package:  iface.Package,
-			File:     iface.File,
-			Position: iface.Position,
-			Methods:  convertToLegacyFuncs(iface.Methods),
-		}
-	}
-
-	// Convert functions
-	for i, f := range result.Functions {
-		legacyResult.Functions[i] = extraction.LegacyFuncInfo{
-			Name:      f.Name,
-			Package:   f.Package,
-			File:      f.File,
-			Position:  f.Position,
-			Receiver:  f.Receiver,
-			Params:    convertToLegacyFields(f.Params),
-			Results:   convertToLegacyFields(f.Results),
-			BodyCalls: f.BodyCalls,
-		}
-	}
-
-	// Convert packages
-	for i, p := range result.Packages {
-		legacyResult.Packages[i] = extraction.LegacyPackageInfo{
-			Name:    p.Name,
-			Path:    p.Path,
-			Files:   []string{p.File}, // Single file as slice
-			Imports: convertToLegacyImports(p.Imports),
-		}
-	}
-
-	return legacyResult
-}
-
-// convertToLegacyFields converts []FieldInfo to []extraction.LegacyFieldInfo
-func convertToLegacyFields(fields []FieldInfo) []extraction.LegacyFieldInfo {
-	legacyFields := make([]extraction.LegacyFieldInfo, len(fields))
-	for i, f := range fields {
-		legacyFields[i] = extraction.LegacyFieldInfo{
-			Name: f.Name,
-			Type: f.Type,
-		}
-	}
-	return legacyFields
-}
-
-// convertToLegacyFuncs converts []FuncInfo to []extraction.LegacyFuncInfo
-func convertToLegacyFuncs(funcs []FuncInfo) []extraction.LegacyFuncInfo {
-	legacyFuncs := make([]extraction.LegacyFuncInfo, len(funcs))
-	for i, f := range funcs {
-		legacyFuncs[i] = extraction.LegacyFuncInfo{
-			Name:      f.Name,
-			Package:   f.Package,
-			File:      f.File,
-			Position:  f.Position,
-			Receiver:  f.Receiver,
-			Params:    convertToLegacyFields(f.Params),
-			Results:   convertToLegacyFields(f.Results),
-			BodyCalls: f.BodyCalls,
-		}
-	}
-	return legacyFuncs
-}
-
-// convertToLegacyImports converts []ImportInfo to []extraction.LegacyImportInfo
-func convertToLegacyImports(imports []ImportInfo) []extraction.LegacyImportInfo {
-	legacyImports := make([]extraction.LegacyImportInfo, len(imports))
-	for i, imp := range imports {
-		legacyImports[i] = extraction.LegacyImportInfo{
-			Path:  imp.Path,
-			Alias: imp.Alias,
-		}
-	}
-	return legacyImports
-}
 
 // extractImports はASTファイルからimport文を解析してImportInfoのスライスを返します。
 // importパスとエイリアス情報を抽出し、エイリアスが指定されていない場合は
