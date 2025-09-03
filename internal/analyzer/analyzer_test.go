@@ -35,11 +35,71 @@ func TestGoAnalyzer_SetFilters(t *testing.T) {
 		args   args
 	}{
 		{
-			name: "SetFilters",
+			name: "SetFilters_SingleTargetPackage",
 			fields: fields{
 				Filters: Filters{},
 			},
 			args: args{filters: Filters{TargetPackages: []string{"test"}}},
+		},
+		{
+			name: "SetFilters_MultipleTargetPackages",
+			fields: fields{
+				Filters: Filters{},
+			},
+			args: args{filters: Filters{TargetPackages: []string{"test1", "test2", "test3"}}},
+		},
+		{
+			name: "SetFilters_ExcludePackages",
+			fields: fields{
+				Filters: Filters{},
+			},
+			args: args{filters: Filters{
+				TargetPackages:  []string{"test"},
+				ExcludePackages: []string{"exclude1", "exclude2"},
+			}},
+		},
+		{
+			name: "SetFilters_ExcludeDirs",
+			fields: fields{
+				Filters: Filters{},
+			},
+			args: args{filters: Filters{
+				TargetPackages: []string{"test"},
+				ExcludeDirs:    []string{"/tmp", "/test"},
+			}},
+		},
+		{
+			name: "SetFilters_AllFilters",
+			fields: fields{
+				Filters: Filters{},
+			},
+			args: args{filters: Filters{
+				TargetPackages:  []string{"main", "utils", "config"},
+				ExcludePackages: []string{"test", "mock"},
+				ExcludeDirs:     []string{"/vendor", "/node_modules", "/tmp"},
+			}},
+		},
+		{
+			name: "SetFilters_EmptyFilters",
+			fields: fields{
+				Filters: Filters{TargetPackages: []string{"existing"}},
+			},
+			args: args{filters: Filters{}},
+		},
+		{
+			name: "SetFilters_OverwriteExistingFilters",
+			fields: fields{
+				Filters: Filters{
+					TargetPackages:  []string{"old1", "old2"},
+					ExcludePackages: []string{"oldExclude"},
+					ExcludeDirs:     []string{"/oldDir"},
+				},
+			},
+			args: args{filters: Filters{
+				TargetPackages:  []string{"new1", "new2"},
+				ExcludePackages: []string{"newExclude"},
+				ExcludeDirs:     []string{"/newDir"},
+			}},
 		},
 	}
 	for _, tt := range tests {
@@ -50,13 +110,22 @@ func TestGoAnalyzer_SetFilters(t *testing.T) {
 				Result:    tt.fields.Result,
 			}
 			ga.SetFilters(tt.args.filters)
-			// フィルターが設定されていることを確認
-			if ga.Filters.TargetPackages == nil {
-				t.Errorf("Filters.TargetPackages = nil, want %v", tt.args.filters.TargetPackages)
-			}
+
+			// TargetPackagesの確認
 			if !slices.Equal(ga.Filters.TargetPackages, tt.args.filters.TargetPackages) {
 				t.Errorf("Filters.TargetPackages = %v, want %v", ga.Filters.TargetPackages, tt.args.filters.TargetPackages)
 			}
+
+			// ExcludePackagesの確認
+			if !slices.Equal(ga.Filters.ExcludePackages, tt.args.filters.ExcludePackages) {
+				t.Errorf("Filters.ExcludePackages = %v, want %v", ga.Filters.ExcludePackages, tt.args.filters.ExcludePackages)
+			}
+
+			// ExcludeDirsの確認
+			if !slices.Equal(ga.Filters.ExcludeDirs, tt.args.filters.ExcludeDirs) {
+				t.Errorf("Filters.ExcludeDirs = %v, want %v", ga.Filters.ExcludeDirs, tt.args.filters.ExcludeDirs)
+			}
+
 		})
 	}
 }
