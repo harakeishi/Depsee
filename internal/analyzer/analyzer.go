@@ -10,9 +10,19 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/harakeishi/depsee/internal/analyzer/extraction"
 	"github.com/harakeishi/depsee/internal/errors"
 	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/harakeishi/depsee/internal/types"
 )
+
+// DependencyInfo は依存関係情報を表す構造体です。
+// 依存元ノード、依存先ノード、依存関係の種類を定義します。
+type DependencyInfo struct {
+	From types.NodeID         // 依存元のノードID
+	To   types.NodeID         // 依存先のノードID
+	Type types.DependencyType // 依存関係の種類
+}
 
 // Result は解析結果を格納する構造体です。
 // 解析で抽出された構造体、インターフェース、関数、パッケージの情報と
@@ -39,6 +49,7 @@ type Filters struct {
 type GoAnalyzer struct {
 	Filters   Filters  // 解析に適用するフィルタ条件
 	filesPath []string // 解析対象のGoファイルパス一覧
+	targetDir string   // 解析対象のルートディレクトリ
 	Result    *Result  // 解析結果を格納する構造体
 }
 
@@ -74,6 +85,7 @@ func (ga *GoAnalyzer) ExportResult() *Result {
 // ディレクトリを再帰的に探索し、設定されたフィルタ条件に基づいて
 // 解析対象となる.goファイル（テストファイル除く）を抽出します。
 func (ga *GoAnalyzer) ListTartgetFiles(dir string) error {
+	ga.targetDir = dir // ディレクトリを記録
 	ga.filesPath = []string{}
 
 	// ディレクトリの存在確認
@@ -171,7 +183,7 @@ func (ga *GoAnalyzer) Analyze() error {
 	}
 
 	// 依存関係解析を実行
-	dependencies := ga.extractDependencies(ga.Result)
+	dependencies := ga.extractDependencies(ga.Result, ga.targetDir)
 	ga.Result.Dependencies = dependencies
 
 	logger.Info("解析完了", "files", len(ga.filesPath), "structs", len(ga.Result.Structs), "interfaces", len(ga.Result.Interfaces), "functions", len(ga.Result.Functions), "packages", len(ga.Result.Packages), "dependencies", len(ga.Result.Dependencies))
@@ -181,29 +193,137 @@ func (ga *GoAnalyzer) Analyze() error {
 // extractDependencies は解析結果から依存関係を抽出します。
 // 複数の依存関係抽出戦略（フィールド、シグネチャ、関数呼び出し、パッケージ間）を使用して
 // 包括的な依存関係情報を収集します。
-func (ga *GoAnalyzer) extractDependencies(result *Result) []DependencyInfo {
+func (ga *GoAnalyzer) extractDependencies(result *Result, targetDir string) []DependencyInfo {
 	logger.Info("依存関係解析開始")
 
 	var allDependencies []DependencyInfo
 
-	// 型解析器の初期化
-	typeResolver := NewTypeResolver()
-
 	// 依存関係抽出（戦略パターンを使用）
-	extractors := []DependencyExtractor{
-		NewFieldDependencyExtractor(typeResolver),
-		&SignatureDependencyExtractor{},
-		&BodyCallDependencyExtractor{},
-		NewCrossPackageDependencyExtractor(),
+	legacyTypeResolver := &extraction.LegacyTypeResolver{}
+	legacyResult := convertToLegacyResult(result)
+	
+	extractors := []extraction.LegacyDependencyExtractor{
+		extraction.NewLegacyFieldDependencyExtractor(legacyTypeResolver),
+		&extraction.LegacySignatureDependencyExtractor{},
+		&extraction.LegacyBodyCallDependencyExtractor{},
+		extraction.NewLegacyPackageDependencyExtractor(targetDir),
+		extraction.NewLegacyCrossPackageDependencyExtractor(),
 	}
 
 	for _, extractor := range extractors {
-		dependencies := extractor.Extract(result)
-		allDependencies = append(allDependencies, dependencies...)
+		dependencies := extractor.Extract(legacyResult)
+		for _, dep := range dependencies {
+			allDependencies = append(allDependencies, DependencyInfo{
+				From: dep.From,
+				To:   dep.To,
+				Type: dep.Type,
+			})
+		}
 	}
 
 	logger.Info("依存関係解析完了", "total_dependencies", len(allDependencies))
 	return allDependencies
+}
+
+// convertToLegacyResult converts Result to extraction.LegacyResult
+func convertToLegacyResult(result *Result) *extraction.LegacyResult {
+	legacyResult := &extraction.LegacyResult{
+		Structs:    make([]extraction.LegacyStructInfo, len(result.Structs)),
+		Interfaces: make([]extraction.LegacyInterfaceInfo, len(result.Interfaces)),
+		Functions:  make([]extraction.LegacyFuncInfo, len(result.Functions)),
+		Packages:   make([]extraction.LegacyPackageInfo, len(result.Packages)),
+	}
+
+	// Convert structs
+	for i, s := range result.Structs {
+		legacyResult.Structs[i] = extraction.LegacyStructInfo{
+			Name:     s.Name,
+			Package:  s.Package,
+			File:     s.File,
+			Position: s.Position,
+			Fields:   convertToLegacyFields(s.Fields),
+			Methods:  convertToLegacyFuncs(s.Methods),
+		}
+	}
+
+	// Convert interfaces
+	for i, iface := range result.Interfaces {
+		legacyResult.Interfaces[i] = extraction.LegacyInterfaceInfo{
+			Name:     iface.Name,
+			Package:  iface.Package,
+			File:     iface.File,
+			Position: iface.Position,
+			Methods:  convertToLegacyFuncs(iface.Methods),
+		}
+	}
+
+	// Convert functions
+	for i, f := range result.Functions {
+		legacyResult.Functions[i] = extraction.LegacyFuncInfo{
+			Name:      f.Name,
+			Package:   f.Package,
+			File:      f.File,
+			Position:  f.Position,
+			Receiver:  f.Receiver,
+			Params:    convertToLegacyFields(f.Params),
+			Results:   convertToLegacyFields(f.Results),
+			BodyCalls: f.BodyCalls,
+		}
+	}
+
+	// Convert packages
+	for i, p := range result.Packages {
+		legacyResult.Packages[i] = extraction.LegacyPackageInfo{
+			Name:    p.Name,
+			Path:    p.Path,
+			Files:   []string{p.File}, // Single file as slice
+			Imports: convertToLegacyImports(p.Imports),
+		}
+	}
+
+	return legacyResult
+}
+
+// convertToLegacyFields converts []FieldInfo to []extraction.LegacyFieldInfo
+func convertToLegacyFields(fields []FieldInfo) []extraction.LegacyFieldInfo {
+	legacyFields := make([]extraction.LegacyFieldInfo, len(fields))
+	for i, f := range fields {
+		legacyFields[i] = extraction.LegacyFieldInfo{
+			Name: f.Name,
+			Type: f.Type,
+		}
+	}
+	return legacyFields
+}
+
+// convertToLegacyFuncs converts []FuncInfo to []extraction.LegacyFuncInfo
+func convertToLegacyFuncs(funcs []FuncInfo) []extraction.LegacyFuncInfo {
+	legacyFuncs := make([]extraction.LegacyFuncInfo, len(funcs))
+	for i, f := range funcs {
+		legacyFuncs[i] = extraction.LegacyFuncInfo{
+			Name:      f.Name,
+			Package:   f.Package,
+			File:      f.File,
+			Position:  f.Position,
+			Receiver:  f.Receiver,
+			Params:    convertToLegacyFields(f.Params),
+			Results:   convertToLegacyFields(f.Results),
+			BodyCalls: f.BodyCalls,
+		}
+	}
+	return legacyFuncs
+}
+
+// convertToLegacyImports converts []ImportInfo to []extraction.LegacyImportInfo
+func convertToLegacyImports(imports []ImportInfo) []extraction.LegacyImportInfo {
+	legacyImports := make([]extraction.LegacyImportInfo, len(imports))
+	for i, imp := range imports {
+		legacyImports[i] = extraction.LegacyImportInfo{
+			Path:  imp.Path,
+			Alias: imp.Alias,
+		}
+	}
+	return legacyImports
 }
 
 // extractImports はASTファイルからimport文を解析してImportInfoのスライスを返します。
