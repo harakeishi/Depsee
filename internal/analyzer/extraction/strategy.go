@@ -14,7 +14,7 @@ type DependencyInfo = types.DependencyInfo
 type ExtractionStrategy interface {
 	// ExtractDependencies extracts dependencies from the AST
 	ExtractDependencies(file *ast.File, fset *token.FileSet, packageName string) ([]DependencyInfo, error)
-	
+
 	// Name returns the name of the strategy
 	Name() string
 }
