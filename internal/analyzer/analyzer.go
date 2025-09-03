@@ -15,10 +15,11 @@ import (
 )
 
 type Result struct {
-	Structs    []StructInfo
-	Interfaces []InterfaceInfo
-	Functions  []FuncInfo
-	Packages   []PackageInfo
+	Structs      []StructInfo
+	Interfaces   []InterfaceInfo
+	Functions    []FuncInfo
+	Packages     []PackageInfo
+	Dependencies []DependencyInfo
 }
 
 type Filters struct {
@@ -150,7 +151,66 @@ func (ga *GoAnalyzer) Analyze() error {
 		}
 		analyzeFile(f, fset, file, ga.Result)
 	}
+
+	// 依存関係解析を実行
+	dependencies := ga.extractDependencies(ga.Result)
+	ga.Result.Dependencies = dependencies
+
+	logger.Info("解析完了", "files", len(ga.filesPath), "structs", len(ga.Result.Structs), "interfaces", len(ga.Result.Interfaces), "functions", len(ga.Result.Functions), "packages", len(ga.Result.Packages), "dependencies", len(ga.Result.Dependencies))
 	return nil
+}
+
+// extractDependencies は解析結果から依存関係を抽出する
+func (ga *GoAnalyzer) extractDependencies(result *Result) []DependencyInfo {
+	logger.Info("依存関係解析開始")
+
+	var allDependencies []DependencyInfo
+
+	// 型解析器の初期化
+	typeResolver := NewTypeResolver()
+
+	// 依存関係抽出（戦略パターンを使用）
+	extractors := []DependencyExtractor{
+		NewFieldDependencyExtractor(typeResolver),
+		&SignatureDependencyExtractor{},
+		&BodyCallDependencyExtractor{},
+		NewCrossPackageDependencyExtractor(),
+	}
+
+	for _, extractor := range extractors {
+		dependencies := extractor.Extract(result)
+		allDependencies = append(allDependencies, dependencies...)
+	}
+
+	logger.Info("依存関係解析完了", "total_dependencies", len(allDependencies))
+	return allDependencies
+}
+
+// extractDependenciesWithPackages は解析結果から依存関係を抽出する（パッケージ間依存関係を含む）
+func (ga *GoAnalyzer) extractDependenciesWithPackages(result *Result, targetDir string) []DependencyInfo {
+	logger.Info("依存関係解析開始（パッケージ間を含む）")
+
+	var allDependencies []DependencyInfo
+
+	// 型解析器の初期化
+	typeResolver := NewTypeResolver()
+
+	// 依存関係抽出（戦略パターンを使用）
+	extractors := []DependencyExtractor{
+		NewFieldDependencyExtractor(typeResolver),
+		&SignatureDependencyExtractor{},
+		&BodyCallDependencyExtractor{},
+		NewCrossPackageDependencyExtractor(),
+		NewPackageDependencyExtractor(targetDir),
+	}
+
+	for _, extractor := range extractors {
+		dependencies := extractor.Extract(result)
+		allDependencies = append(allDependencies, dependencies...)
+	}
+
+	logger.Info("依存関係解析完了（パッケージ間を含む）", "total_dependencies", len(allDependencies))
+	return allDependencies
 }
 
 // extractImports はASTファイルからimport文を解析してImportInfoのスライスを返す

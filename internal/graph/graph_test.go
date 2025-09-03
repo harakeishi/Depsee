@@ -143,6 +143,18 @@ func TestBuildDependencyGraph(t *testing.T) {
 				},
 			},
 		},
+		Dependencies: []analyzer.DependencyInfo{
+			{
+				From: analyzer.NodeID("test.User"),
+				To:   analyzer.NodeID("test.Profile"),
+				Type: analyzer.FieldDependency,
+			},
+			{
+				From: analyzer.NodeID("test.CreateUser"),
+				To:   analyzer.NodeID("test.User"),
+				Type: analyzer.SignatureDependency,
+			},
+		},
 	}
 
 	g := BuildDependencyGraph(result)

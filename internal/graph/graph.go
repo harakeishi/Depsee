@@ -61,19 +61,9 @@ func BuildDependencyGraph(result *analyzer.Result) *DependencyGraph {
 	// ノード登録
 	registerNodes(result, g)
 
-	// 型解析器の初期化
-	typeResolver := analyzer.NewTypeResolver()
-
-	// 依存関係抽出（戦略パターンを使用）
-	extractors := []DependencyExtractor{
-		NewFieldDependencyExtractor(typeResolver),
-		&SignatureDependencyExtractor{},
-		&BodyCallDependencyExtractor{},
-		NewCrossPackageDependencyExtractor(),
-	}
-
-	for _, extractor := range extractors {
-		extractor.Extract(result, g)
+	// 依存関係情報からエッジを構築
+	for _, dep := range result.Dependencies {
+		g.AddEdge(NodeID(dep.From), NodeID(dep.To))
 	}
 
 	logger.Info("依存グラフ構築完了", "nodes", len(g.Nodes), "edges", countEdges(g))
@@ -89,20 +79,21 @@ func BuildDependencyGraphWithPackages(result *analyzer.Result, targetDir string)
 	// ノード登録
 	registerNodes(result, g)
 
-	// 型解析器の初期化
-	typeResolver := analyzer.NewTypeResolver()
-
-	// 依存関係抽出（戦略パターンを使用）
-	extractors := []DependencyExtractor{
-		NewFieldDependencyExtractor(typeResolver),
-		&SignatureDependencyExtractor{},
-		&BodyCallDependencyExtractor{},
-		NewCrossPackageDependencyExtractor(),
-		NewPackageDependencyExtractor(targetDir),
+	// パッケージノードを追加
+	for _, pkg := range result.Packages {
+		nodeID := NodeID("package:" + pkg.Name)
+		node := &Node{
+			ID:      nodeID,
+			Kind:    NodePackage,
+			Name:    pkg.Name,
+			Package: pkg.Name,
+		}
+		g.AddNode(node)
 	}
 
-	for _, extractor := range extractors {
-		extractor.Extract(result, g)
+	// 依存関係情報からエッジを構築
+	for _, dep := range result.Dependencies {
+		g.AddEdge(NodeID(dep.From), NodeID(dep.To))
 	}
 
 	logger.Info("パッケージ間依存関係を含む依存グラフ構築完了", "nodes", len(g.Nodes), "edges", countEdges(g))
