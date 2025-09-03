@@ -99,6 +99,7 @@ type nodeWithStability struct {
 	Name        string
 	Kind        graph.NodeKind
 	Package     string
+	ParentType  string  // メソッドの場合、所属構造体名
 	Instability float64
 	SafeID      string
 }
@@ -129,6 +130,7 @@ func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.Stabi
 			Name:        n.Name,
 			Kind:        n.Kind,
 			Package:     n.Package,
+			ParentType:  n.ParentType,
 			Instability: inst,
 			SafeID:      sanitizeNodeID(string(id)),
 		}
@@ -183,11 +185,17 @@ func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.Stabi
 		packageTitle := fmt.Sprintf("%s (不安定度:%.2f)", pkg, packageInstability)
 		out += fmt.Sprintf("    subgraph %s[\"%s\"]\n", safePkgName, escapeNodeLabel(packageTitle))
 
+		// 構造体とメソッドをグルーピング
+		out += generateStructGroupings(nodes, idMapping)
+		
+		// その他のノード（インターフェース、関数）を配置
 		for _, n := range nodes {
-			idMapping[n.ID] = n.SafeID
-			escapedName := escapeNodeLabel(n.Name)
-			nodeShape := getNodeShape(n.Kind)
-			out += fmt.Sprintf("        %s%s\n", n.SafeID, nodeShape(escapedName, n.Instability))
+			if n.Kind != graph.NodeStruct && n.Kind != graph.NodeMethod {
+				idMapping[n.ID] = n.SafeID
+				escapedName := escapeNodeLabel(n.Name)
+				nodeShape := getNodeShape(n.Kind)
+				out += fmt.Sprintf("        %s%s\n", n.SafeID, nodeShape(escapedName, n.Instability))
+			}
 		}
 
 		out += "    end\n"
@@ -269,6 +277,11 @@ func getNodeShape(kind graph.NodeKind) func(string, float64) string {
 		return func(name string, instability float64) string {
 			return fmt.Sprintf("(⚙️ func: %s<br>不安定度:%.2f)", name, instability)
 		}
+	case graph.NodeMethod:
+		// メソッド: 角丸長方形 + メソッドアイコン
+		return func(name string, instability float64) string {
+			return fmt.Sprintf("(🔧 method: %s<br>不安定度:%.2f)", name, instability)
+		}
 	case graph.NodePackage:
 		// パッケージ: 六角形 + パッケージアイコン
 		return func(name string, instability float64) string {
@@ -292,6 +305,8 @@ func generateStyles() string {
     classDef interfaceStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     %% 関数: 緑系（処理・動作を表現）
     classDef funcStyle fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    %% メソッド: 水色系（構造体に関連する処理を表現）
+    classDef methodStyle fill:#e0f2f1,stroke:#00695c,stroke-width:2px
     %% パッケージ: オレンジ系（グループ化を表現）
     classDef packageStyle fill:#fff3e0,stroke:#e65100,stroke-width:3px
 `
@@ -311,6 +326,8 @@ func applyNodeStyles(packageNodes map[string][]nodeWithStability) string {
 				styleClass = "interfaceStyle"
 			case graph.NodeFunc:
 				styleClass = "funcStyle"
+			case graph.NodeMethod:
+				styleClass = "methodStyle"
 			case graph.NodePackage:
 				styleClass = "packageStyle"
 			default:
@@ -320,5 +337,66 @@ func applyNodeStyles(packageNodes map[string][]nodeWithStability) string {
 		}
 	}
 
+	return out
+}
+
+// generateStructGroupings は構造体とそのメソッドをグルーピングしてサブグラフとして生成
+func generateStructGroupings(nodes []nodeWithStability, idMapping map[graph.NodeID]string) string {
+	var out string
+	
+	// 構造体ごとにメソッドをグルーピング
+	structMethodMap := make(map[string][]nodeWithStability)
+	structNodes := make(map[string]nodeWithStability)
+	
+	// まず構造体を処理
+	for _, n := range nodes {
+		if n.Kind == graph.NodeStruct {
+			structNodes[n.Name] = n
+			structMethodMap[n.Name] = []nodeWithStability{}
+		}
+	}
+	
+	// 次にメソッドを処理
+	for _, n := range nodes {
+		if n.Kind == graph.NodeMethod {
+			// ParentTypeを使用して正確にメソッドと構造体を関連付け
+			if n.ParentType != "" {
+				if _, exists := structMethodMap[n.ParentType]; exists {
+					structMethodMap[n.ParentType] = append(structMethodMap[n.ParentType], n)
+				}
+			}
+		}
+	}
+	
+	// 構造体ごとのサブグラフを生成
+	for structName, structNode := range structNodes {
+		methods := structMethodMap[structName]
+		
+		// サブグラフのID生成
+		subgraphID := sanitizeNodeID(fmt.Sprintf("struct_%s", structName))
+		subgraphTitle := fmt.Sprintf("📦 %s", structName)
+		
+		out += fmt.Sprintf("        subgraph %s[\"%s\"]\n", subgraphID, escapeNodeLabel(subgraphTitle))
+		
+		// 構造体ノードを追加
+		idMapping[structNode.ID] = structNode.SafeID
+		escapedName := escapeNodeLabel(structNode.Name)
+		nodeShape := getNodeShape(structNode.Kind)
+		out += fmt.Sprintf("            %s%s\n", structNode.SafeID, nodeShape(escapedName, structNode.Instability))
+		
+		// メソッドノードを追加
+		for _, method := range methods {
+			idMapping[method.ID] = method.SafeID
+			escapedMethodName := escapeNodeLabel(method.Name)
+			methodShape := getNodeShape(method.Kind)
+			out += fmt.Sprintf("            %s%s\n", method.SafeID, methodShape(escapedMethodName, method.Instability))
+		}
+		
+		out += "        end\n"
+		
+		// サブグラフにスタイルを適用
+		out += fmt.Sprintf("        style %s fill:#f0f8ff,stroke:#4682b4,stroke-width:2px,stroke-dasharray: 5 5\n", subgraphID)
+	}
+	
 	return out
 }

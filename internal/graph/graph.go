@@ -11,16 +11,18 @@ const (
 	NodeStruct NodeKind = iota
 	NodeInterface
 	NodeFunc
+	NodeMethod
 	NodePackage
 )
 
 type NodeID string // 例: "package.StructName"
 
 type Node struct {
-	ID      NodeID
-	Kind    NodeKind
-	Name    string
-	Package string
+	ID         NodeID
+	Kind       NodeKind
+	Name       string
+	Package    string
+	ParentType string // メソッドの場合、所属構造体名
 }
 
 type Edge struct {
@@ -145,5 +147,20 @@ func registerNodes(result *analyzer.Result, g *DependencyGraph) {
 			Package: f.Package,
 		}
 		g.AddNode(node)
+	}
+
+	// メソッドノード登録
+	for _, s := range result.Structs {
+		for _, m := range s.Methods {
+			id := NodeID(s.Package + "." + m.Name)
+			node := &Node{
+				ID:         id,
+				Kind:       NodeMethod,
+				Name:       m.Name,
+				Package:    s.Package,
+				ParentType: s.Name,
+			}
+			g.AddNode(node)
+		}
 	}
 }
