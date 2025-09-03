@@ -46,6 +46,7 @@ func NewGoAnalyzer() Analyzer {
 }
 
 // SetFilters は解析フィルタを設定する
+// :FIXME: コンストラクタで設定する
 func (ga *GoAnalyzer) SetFilters(filters Filters) {
 	ga.Filters = filters
 }
