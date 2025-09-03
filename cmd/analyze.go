@@ -25,10 +25,13 @@ var analyzeCmd = &cobra.Command{
 
 例:
   depsee analyze ./src
-  depsee analyze --include-package-deps ./src
-  depsee analyze --target-packages main,cmd ./src
-  depsee analyze --exclude-packages test,mock ./src
-  depsee analyze --exclude-dirs testdata,vendor ./src`,
+  depsee analyze -p ./src                           # パッケージ間依存関係を含む
+  depsee analyze --include-package-deps ./src       # 上記と同じ
+  depsee analyze -t main,cmd ./src                  # 特定パッケージのみ解析
+  depsee analyze -e test,mock ./src                 # 特定パッケージを除外
+  depsee analyze -d testdata,vendor ./src           # 特定ディレクトリを除外
+  depsee analyze -s ./src                           # SDP違反をハイライト
+  depsee analyze -p -s -e test ./src                # 複数オプション組み合わせ`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAnalyze,
 }
@@ -37,11 +40,11 @@ func init() {
 	rootCmd.AddCommand(analyzeCmd)
 
 	// analyzeコマンド専用フラグ
-	analyzeCmd.Flags().BoolVar(&includePackageDeps, "include-package-deps", false, "同リポジトリ内のパッケージ間依存関係を解析")
-	analyzeCmd.Flags().BoolVar(&highlightSDPViolations, "highlight-sdp-violations", false, "SDP（Stable Dependencies Principle）違反のエッジを赤色でハイライト")
-	analyzeCmd.Flags().StringVar(&targetPackages, "target-packages", "", "解析対象とするパッケージ名をカンマ区切りで指定（例: main,cmd）。指定しない場合は全パッケージが対象")
-	analyzeCmd.Flags().StringVar(&excludePackages, "exclude-packages", "", "解析対象から除外するパッケージ名をカンマ区切りで指定（例: test,mock,vendor）")
-	analyzeCmd.Flags().StringVar(&excludeDirs, "exclude-dirs", "", "解析対象から除外するディレクトリパスをカンマ区切りで指定（例: testdata,vendor,third_party）")
+	analyzeCmd.Flags().BoolVarP(&includePackageDeps, "include-package-deps", "p", false, "同リポジトリ内のパッケージ間依存関係を解析")
+	analyzeCmd.Flags().BoolVarP(&highlightSDPViolations, "highlight-sdp-violations", "s", false, "SDP（Stable Dependencies Principle）違反のエッジを赤色でハイライト")
+	analyzeCmd.Flags().StringVarP(&targetPackages, "target-packages", "t", "", "解析対象とするパッケージ名をカンマ区切りで指定（例: main,cmd）。指定しない場合は全パッケージが対象")
+	analyzeCmd.Flags().StringVarP(&excludePackages, "exclude-packages", "e", "", "解析対象から除外するパッケージ名をカンマ区切りで指定（例: test,mock,vendor）")
+	analyzeCmd.Flags().StringVarP(&excludeDirs, "exclude-dirs", "d", "", "解析対象から除外するディレクトリパスをカンマ区切りで指定（例: testdata,vendor,third_party）")
 }
 
 // runAnalyze はanalyzeコマンドの実行ロジック
