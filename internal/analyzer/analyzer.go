@@ -178,26 +178,12 @@ func extractImports(f *ast.File) []ImportInfo {
 	return imports
 }
 
-// analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
-func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) {
-	pkgName := f.Name.Name
+// extractTypes はASTファイルから型宣言（構造体・インターフェース）を解析する
+func extractTypes(f *ast.File, fset *token.FileSet, file string, pkgName string) ([]StructInfo, []InterfaceInfo, map[string]*StructInfo) {
+	var structs []StructInfo
+	var interfaces []InterfaceInfo
 	structMap := map[string]*StructInfo{}
 
-	// 0th pass: import文の解析
-	imports := extractImports(f)
-
-	// パッケージ情報を追加
-	pos := fset.Position(f.Name.Pos())
-	packageInfo := PackageInfo{
-		Name:     pkgName,
-		Path:     "", // TODO: パッケージパスの取得
-		File:     file,
-		Position: pos,
-		Imports:  imports,
-	}
-	result.Packages = append(result.Packages, packageInfo)
-
-	// 1st pass: type宣言（構造体・インターフェース）
 	for _, decl := range f.Decls {
 		genDecl, ok := decl.(*ast.GenDecl)
 		if !ok || genDecl.Tok != token.TYPE {
@@ -236,7 +222,7 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) 
 					Fields:   fields,
 				}
 				structMap[si.Name] = &si
-				result.Structs = append(result.Structs, si)
+				structs = append(structs, si)
 			case *ast.InterfaceType:
 				ii := InterfaceInfo{
 					Name:     typeSpec.Name.Name,
@@ -244,10 +230,35 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) 
 					File:     file,
 					Position: pos,
 				}
-				result.Interfaces = append(result.Interfaces, ii)
+				interfaces = append(interfaces, ii)
 			}
 		}
 	}
+	return structs, interfaces, structMap
+}
+
+// analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
+func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) {
+	pkgName := f.Name.Name
+
+	// 0th pass: import文の解析
+	imports := extractImports(f)
+
+	// パッケージ情報を追加
+	pos := fset.Position(f.Name.Pos())
+	packageInfo := PackageInfo{
+		Name:     pkgName,
+		Path:     "", // TODO: パッケージパスの取得
+		File:     file,
+		Position: pos,
+		Imports:  imports,
+	}
+	result.Packages = append(result.Packages, packageInfo)
+
+	// 1st pass: type宣言（構造体・インターフェース）
+	structs, interfaces, structMap := extractTypes(f, fset, file, pkgName)
+	result.Structs = append(result.Structs, structs...)
+	result.Interfaces = append(result.Interfaces, interfaces...)
 
 	// 2nd pass: 関数・メソッド
 	for _, decl := range f.Decls {

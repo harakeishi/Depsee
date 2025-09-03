@@ -530,3 +530,202 @@ func main() {}`,
 		})
 	}
 }
+
+func TestExtractTypes(t *testing.T) {
+	tests := []struct {
+		name               string
+		content            string
+		expectedStructs    []StructInfo
+		expectedInterfaces []InterfaceInfo
+		expectedStructMap  map[string]string // 簡略化：構造体名のみを検証
+	}{
+		{
+			name: "extractTypes_SimpleStruct",
+			content: `package test
+
+type User struct {
+	ID   int
+	Name string
+}`,
+			expectedStructs: []StructInfo{
+				{
+					Name:    "User",
+					Package: "test",
+					Fields: []FieldInfo{
+						{Name: "ID", Type: "int"},
+						{Name: "Name", Type: "string"},
+					},
+				},
+			},
+			expectedInterfaces: []InterfaceInfo{},
+			expectedStructMap:  map[string]string{"User": "User"},
+		},
+		{
+			name: "extractTypes_SimpleInterface",
+			content: `package test
+
+type Reader interface {
+	Read([]byte) (int, error)
+}`,
+			expectedStructs: []StructInfo{},
+			expectedInterfaces: []InterfaceInfo{
+				{
+					Name:    "Reader",
+					Package: "test",
+				},
+			},
+			expectedStructMap: map[string]string{},
+		},
+		{
+			name: "extractTypes_StructWithEmbedding",
+			content: `package test
+
+type Base struct {
+	ID int
+}
+
+type User struct {
+	Base
+	Name string
+}`,
+			expectedStructs: []StructInfo{
+				{
+					Name:    "Base",
+					Package: "test",
+					Fields: []FieldInfo{
+						{Name: "ID", Type: "int"},
+					},
+				},
+				{
+					Name:    "User",
+					Package: "test",
+					Fields: []FieldInfo{
+						{Name: "", Type: "Base"},
+						{Name: "Name", Type: "string"},
+					},
+				},
+			},
+			expectedInterfaces: []InterfaceInfo{},
+			expectedStructMap:  map[string]string{"Base": "Base", "User": "User"},
+		},
+		{
+			name: "extractTypes_MultipleTypes",
+			content: `package test
+
+type User struct {
+	ID   int
+	Name string
+}
+
+type UserRepository interface {
+	GetUser(id int) (*User, error)
+}
+
+type Product struct {
+	ID    int
+	Price float64
+}`,
+			expectedStructs: []StructInfo{
+				{
+					Name:    "User",
+					Package: "test",
+					Fields: []FieldInfo{
+						{Name: "ID", Type: "int"},
+						{Name: "Name", Type: "string"},
+					},
+				},
+				{
+					Name:    "Product",
+					Package: "test",
+					Fields: []FieldInfo{
+						{Name: "ID", Type: "int"},
+						{Name: "Price", Type: "float64"},
+					},
+				},
+			},
+			expectedInterfaces: []InterfaceInfo{
+				{
+					Name:    "UserRepository",
+					Package: "test",
+				},
+			},
+			expectedStructMap: map[string]string{"User": "User", "Product": "Product"},
+		},
+		{
+			name: "extractTypes_NoTypes",
+			content: `package test
+
+func main() {}`,
+			expectedStructs:    []StructInfo{},
+			expectedInterfaces: []InterfaceInfo{},
+			expectedStructMap:  map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// テストコードをパースしてASTを作成
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, "test.go", tt.content, parser.ParseComments)
+			if err != nil {
+				t.Fatalf("Failed to parse test content: %v", err)
+			}
+
+			// extractTypes関数をテスト
+			structs, interfaces, structMap := extractTypes(f, fset, "test.go", "test")
+
+			// 構造体の検証
+			if len(structs) != len(tt.expectedStructs) {
+				t.Errorf("extractTypes() returned %d structs, expected %d", len(structs), len(tt.expectedStructs))
+			} else {
+				for i, expected := range tt.expectedStructs {
+					if structs[i].Name != expected.Name {
+						t.Errorf("structs[%d].Name = %q, expected %q", i, structs[i].Name, expected.Name)
+					}
+					if structs[i].Package != expected.Package {
+						t.Errorf("structs[%d].Package = %q, expected %q", i, structs[i].Package, expected.Package)
+					}
+					if len(structs[i].Fields) != len(expected.Fields) {
+						t.Errorf("structs[%d] has %d fields, expected %d", i, len(structs[i].Fields), len(expected.Fields))
+					} else {
+						for j, expectedField := range expected.Fields {
+							if structs[i].Fields[j].Name != expectedField.Name {
+								t.Errorf("structs[%d].Fields[%d].Name = %q, expected %q", i, j, structs[i].Fields[j].Name, expectedField.Name)
+							}
+							if structs[i].Fields[j].Type != expectedField.Type {
+								t.Errorf("structs[%d].Fields[%d].Type = %q, expected %q", i, j, structs[i].Fields[j].Type, expectedField.Type)
+							}
+						}
+					}
+				}
+			}
+
+			// インターフェースの検証
+			if len(interfaces) != len(tt.expectedInterfaces) {
+				t.Errorf("extractTypes() returned %d interfaces, expected %d", len(interfaces), len(tt.expectedInterfaces))
+			} else {
+				for i, expected := range tt.expectedInterfaces {
+					if interfaces[i].Name != expected.Name {
+						t.Errorf("interfaces[%d].Name = %q, expected %q", i, interfaces[i].Name, expected.Name)
+					}
+					if interfaces[i].Package != expected.Package {
+						t.Errorf("interfaces[%d].Package = %q, expected %q", i, interfaces[i].Package, expected.Package)
+					}
+				}
+			}
+
+			// structMapの検証
+			if len(structMap) != len(tt.expectedStructMap) {
+				t.Errorf("extractTypes() returned structMap with %d entries, expected %d", len(structMap), len(tt.expectedStructMap))
+			} else {
+				for expectedName := range tt.expectedStructMap {
+					if _, exists := structMap[expectedName]; !exists {
+						t.Errorf("structMap missing key %q", expectedName)
+					} else if structMap[expectedName].Name != expectedName {
+						t.Errorf("structMap[%q].Name = %q, expected %q", expectedName, structMap[expectedName].Name, expectedName)
+					}
+				}
+			}
+		})
+	}
+}
