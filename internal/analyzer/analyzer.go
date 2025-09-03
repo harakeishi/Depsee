@@ -331,7 +331,7 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) 
 	// 2nd pass: 関数・メソッド
 	functions := extractFunctions(f, fset, file, pkgName, structMap)
 	result.Functions = append(result.Functions, functions...)
-	
+
 	// 構造体リストの更新（メソッドが追加されたstructMapの内容を反映）
 	for i, structInfo := range result.Structs {
 		if s, exists := structMap[structInfo.Name]; exists {
