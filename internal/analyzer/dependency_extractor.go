@@ -26,6 +26,7 @@ const (
 	BodyCallDependency
 	CrossPackageDependency
 	PackageDependency
+	ConcreteInjectionDependency // 具象実装注入の依存関係タイプを追加
 )
 
 // DependencyExtractor は依存関係抽出の戦略インターフェース

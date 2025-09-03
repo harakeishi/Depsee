@@ -170,6 +170,7 @@ func (ga *GoAnalyzer) extractDependencies(result *Result) []DependencyInfo {
 		&SignatureDependencyExtractor{},
 		&BodyCallDependencyExtractor{},
 		NewCrossPackageDependencyExtractor(),
+		NewConcreteInjectionExtractor(), // 具象実装注入関係抽出器を追加
 	}
 
 	for _, extractor := range extractors {
