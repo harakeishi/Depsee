@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/harakeishi/depsee/internal/graph"
+	"github.com/harakeishi/depsee/internal/types"
 )
 
 func TestSanitizeNodeID(t *testing.T) {
@@ -157,7 +158,7 @@ func TestGenerateMermaidWithReservedWords(t *testing.T) {
 
 	// 安定度情報を作成
 	stability := &graph.StabilityResult{
-		NodeStabilities: map[graph.NodeID]*graph.NodeStability{
+		NodeStabilities: map[types.NodeID]*graph.NodeStability{
 			"pkg.graph": {
 				NodeID:      "pkg.graph",
 				OutDegree:   1,
@@ -233,7 +234,7 @@ func TestGenerateMermaidWithSpecialCharacters(t *testing.T) {
 	g.AddNode(specialNode)
 
 	stability := &graph.StabilityResult{
-		NodeStabilities: map[graph.NodeID]*graph.NodeStability{
+		NodeStabilities: map[types.NodeID]*graph.NodeStability{
 			"pkg.User-Service": {
 				NodeID:      "pkg.User-Service",
 				OutDegree:   0,
@@ -293,7 +294,7 @@ func TestGenerateMermaidWithPackageStability(t *testing.T) {
 
 	// 安定度情報を作成
 	stability := &graph.StabilityResult{
-		NodeStabilities: map[graph.NodeID]*graph.NodeStability{
+		NodeStabilities: map[types.NodeID]*graph.NodeStability{
 			"pkg1.User": {
 				NodeID:      "pkg1.User",
 				OutDegree:   1,
@@ -408,7 +409,7 @@ func TestGenerateMermaidWithSDPViolations(t *testing.T) {
 
 	// 安定度情報を作成（SDP違反が発生するように設定）
 	stability := &graph.StabilityResult{
-		NodeStabilities: map[graph.NodeID]*graph.NodeStability{
+		NodeStabilities: map[types.NodeID]*graph.NodeStability{
 			"pkg.Stable": {
 				NodeID:      "pkg.Stable",
 				OutDegree:   1,   // 1つに依存
