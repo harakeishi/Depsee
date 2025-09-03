@@ -221,7 +221,7 @@ func TestGoAnalyzer_ListTartgetFiles(t *testing.T) {
 			},
 			args:          args{dir: "../../testdata/sample"},
 			wantErr:       false,
-			wantFilesPath: []string{},
+			wantFilesPath: []string{"../../testdata/sample/user.go"}, // 空の場合はすべてのファイルが対象
 		},
 	}
 	for _, tt := range tests {
@@ -395,7 +395,77 @@ func TestFilters_shouldIncludeFile(t *testing.T) {
 				TargetPackages: []string{},
 			},
 			args:    args{path: "../../testdata/sample/user.go"},
-			want:    false,
+			want:    true, // 空の場合はすべてのパッケージを対象とする
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_EmptyExcludePackages",
+			fields: fields{
+				TargetPackages:  []string{"sample"},
+				ExcludePackages: []string{},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true, // 空の除外リストは除外しない
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_EmptyExcludeDirs",
+			fields: fields{
+				TargetPackages: []string{"sample"},
+				ExcludeDirs:    []string{},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true, // 空の除外ディレクトリは除外しない
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_AllFiltersEmpty",
+			fields: fields{
+				TargetPackages:  []string{},
+				ExcludePackages: []string{},
+				ExcludeDirs:     []string{},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true, // すべて空の場合はすべてを対象とする
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_NilTargetPackages",
+			fields: fields{
+				TargetPackages: nil,
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true, // nilの場合はすべてのパッケージを対象とする
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_NilExcludePackages",
+			fields: fields{
+				TargetPackages:  []string{"sample"},
+				ExcludePackages: nil,
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true, // nilの除外リストは除外しない
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_NilExcludeDirs",
+			fields: fields{
+				TargetPackages: []string{"sample"},
+				ExcludeDirs:    nil,
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    true, // nilの除外ディレクトリは除外しない
+			wantErr: false,
+		},
+		{
+			name: "shouldIncludeFile_EmptyTargetWithExclude",
+			fields: fields{
+				TargetPackages:  []string{},
+				ExcludePackages: []string{"sample"},
+			},
+			args:    args{path: "../../testdata/sample/user.go"},
+			want:    false, // 空のターゲットでも除外は有効
 			wantErr: false,
 		},
 	}

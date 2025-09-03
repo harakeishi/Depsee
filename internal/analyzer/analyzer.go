@@ -105,16 +105,16 @@ func (f Filters) shouldIncludeFile(path string) (bool, error) {
 	}
 	packageName := file.Name.Name
 	// ターゲットパッケージのチェック(もし含まれていなかったら早期リターン)
-	if !slices.Contains(f.TargetPackages, packageName) {
+	if !slices.Contains(f.TargetPackages, packageName) && len(f.TargetPackages) > 0 {
 		return false, nil
 	}
 	// 除外パッケージのチェック(もし含まれていたら早期リターン)
-	if slices.Contains(f.ExcludePackages, packageName) {
+	if slices.Contains(f.ExcludePackages, packageName) && len(f.ExcludePackages) > 0 {
 		return false, nil
 	}
 
 	// 除外ディレクトリのチェック(もし含まれていたら早期リターン)
-	if len(f.ExcludeDirs) > 0 {
+	if len(f.ExcludeDirs) > 0 && len(f.ExcludeDirs) > 0 {
 		for _, excludeDir := range f.ExcludeDirs {
 			rel, err := filepath.Rel(excludeDir, path)
 			if err != nil {
