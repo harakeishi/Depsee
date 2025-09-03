@@ -8,11 +8,7 @@ import (
 )
 
 // DependencyInfo represents a dependency between two nodes
-type DependencyInfo struct {
-	From types.NodeID
-	To   types.NodeID
-	Type types.DependencyType
-}
+type DependencyInfo = types.DependencyInfo
 
 // ExtractionStrategy defines the interface for dependency extraction strategies
 type ExtractionStrategy interface {

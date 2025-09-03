@@ -16,24 +16,18 @@ import (
 	"github.com/harakeishi/depsee/internal/types"
 )
 
-// DependencyInfo は依存関係情報を表す構造体です。
-// 依存元ノード、依存先ノード、依存関係の種類を定義します。
-type DependencyInfo struct {
-	From types.NodeID         // 依存元のノードID
-	To   types.NodeID         // 依存先のノードID
-	Type types.DependencyType // 依存関係の種類
-}
-
 // Result は解析結果を格納する構造体です。
 // 解析で抽出された構造体、インターフェース、関数、パッケージの情報と
 // それらの間の依存関係情報を含みます。
-type Result struct {
-	Structs      []StructInfo     // 抽出された構造体の一覧
-	Interfaces   []InterfaceInfo  // 抽出されたインターフェースの一覧
-	Functions    []FuncInfo       // 抽出された関数の一覧
-	Packages     []PackageInfo    // 解析対象パッケージの一覧
-	Dependencies []DependencyInfo // 抽出された依存関係の一覧
-}
+// Type aliases for common types
+type Result = types.Result
+type DependencyInfo = types.DependencyInfo
+type StructInfo = types.StructInfo
+type InterfaceInfo = types.InterfaceInfo
+type FuncInfo = types.FuncInfo
+type FieldInfo = types.FieldInfo
+type PackageInfo = types.PackageInfo
+type ImportInfo = types.ImportInfo
 
 // Filters は解析対象をフィルタリングするための条件を定義する構造体です。
 // 特定のパッケージのみを対象にしたり、特定のパッケージやディレクトリを除外したりできます。
