@@ -181,7 +181,7 @@ func TestGenerateMermaidWithReservedWords(t *testing.T) {
 	}
 
 	// Mermaid出力を生成
-	result := GenerateMermaid(g, stability)
+	result := GenerateMermaid(g, stabilityResult)
 
 	// 結果の検証
 	if !strings.Contains(result, "graph TD") {
@@ -244,7 +244,7 @@ func TestGenerateMermaidWithSpecialCharacters(t *testing.T) {
 		},
 	}
 
-	result := GenerateMermaid(g, stability)
+	result := GenerateMermaid(g, stabilityResult)
 
 	// 特殊文字がエスケープされているかチェック
 	if !strings.Contains(result, "pkg_User_Service") {
@@ -331,7 +331,7 @@ func TestGenerateMermaidWithPackageStability(t *testing.T) {
 	}
 
 	// Mermaid出力を生成
-	result := GenerateMermaid(g, stability)
+	result := GenerateMermaid(g, stabilityResult)
 
 	// 結果の検証
 	if !strings.Contains(result, "graph TD") {
@@ -441,10 +441,10 @@ func TestGenerateMermaidWithSDPViolations(t *testing.T) {
 	}
 
 	// SDP違反ハイライトなしでMermaid出力を生成
-	resultWithoutHighlight := GenerateMermaidWithOptions(g, stability, false)
+	resultWithoutHighlight := GenerateMermaidWithOptions(g, stabilityResult, false)
 
 	// SDP違反ハイライトありでMermaid出力を生成
-	resultWithHighlight := GenerateMermaidWithOptions(g, stability, true)
+	resultWithHighlight := GenerateMermaidWithOptions(g, stabilityResult, true)
 
 	// 結果の検証
 	if !strings.Contains(resultWithoutHighlight, "graph TD") {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/harakeishi/depsee/internal/analyzer"
+	"github.com/harakeishi/depsee/internal/analyzer/stability"
 	"github.com/harakeishi/depsee/internal/graph"
 	"github.com/harakeishi/depsee/internal/logger"
 	"github.com/harakeishi/depsee/internal/output"
@@ -21,6 +22,7 @@ func TestNew(t *testing.T) {
 func TestNewWithDependencies(t *testing.T) {
 	analyzer := analyzer.New()
 	grapher := graph.NewBuilder()
+	stabilityAnalyzer := stability.NewAnalyzer()
 	outputter := output.NewGenerator()
 	logger := logger.NewLogger(logger.Config{
 		Level:  logger.LevelError,
@@ -28,7 +30,7 @@ func TestNewWithDependencies(t *testing.T) {
 		Output: os.Stderr,
 	})
 
-	app := NewWithDependencies(analyzer, grapher, outputter, logger)
+	app := NewWithDependencies(analyzer, grapher, stabilityAnalyzer, outputter, logger)
 	if app == nil {
 		t.Error("NewWithDependencies() should return a non-nil Depsee instance")
 	}

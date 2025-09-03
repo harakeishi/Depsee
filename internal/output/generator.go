@@ -1,6 +1,9 @@
 package output
 
-import "github.com/harakeishi/depsee/internal/graph"
+import (
+	"github.com/harakeishi/depsee/internal/analyzer/stability"
+	"github.com/harakeishi/depsee/internal/graph"
+)
 
 // Generator は出力を生成するサービス
 type Generator struct{}
@@ -13,11 +16,11 @@ func NewGenerator() OutputGenerator {
 
 
 // GenerateMermaid はMermaid記法の相関図を生成
-func (g *Generator) GenerateMermaid(dependencyGraph *graph.DependencyGraph, stability *graph.StabilityResult) string {
-	return GenerateMermaid(dependencyGraph, stability)
+func (g *Generator) GenerateMermaid(dependencyGraph *graph.DependencyGraph, stabilityResult *stability.Result) string {
+	return GenerateMermaid(dependencyGraph, stabilityResult)
 }
 
 // GenerateMermaidWithOptions はオプション付きでMermaid記法の相関図を生成
-func (g *Generator) GenerateMermaidWithOptions(dependencyGraph *graph.DependencyGraph, stability *graph.StabilityResult, highlightSDPViolations bool) string {
-	return GenerateMermaidWithOptions(dependencyGraph, stability, highlightSDPViolations)
+func (g *Generator) GenerateMermaidWithOptions(dependencyGraph *graph.DependencyGraph, stabilityResult *stability.Result, highlightSDPViolations bool) string {
+	return GenerateMermaidWithOptions(dependencyGraph, stabilityResult, highlightSDPViolations)
 }

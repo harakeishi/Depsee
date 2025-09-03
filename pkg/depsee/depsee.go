@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/harakeishi/depsee/internal/analyzer"
+	"github.com/harakeishi/depsee/internal/analyzer/stability"
 	"github.com/harakeishi/depsee/internal/graph"
 	"github.com/harakeishi/depsee/internal/logger"
 	"github.com/harakeishi/depsee/internal/output"
@@ -25,10 +26,11 @@ type Config struct {
 
 // Depsee はメインのアプリケーションロジックを表します
 type Depsee struct {
-	analyzer  analyzer.Analyzer
-	grapher   graph.GraphBuilder
-	outputter output.OutputGenerator
-	logger    logger.Logger
+	analyzer          analyzer.Analyzer
+	grapher           graph.GraphBuilder
+	stabilityAnalyzer stability.Analyzer
+	outputter         output.OutputGenerator
+	logger            logger.Logger
 }
 
 // New は新しいDepseeインスタンスを作成します
@@ -36,6 +38,7 @@ func New() *Depsee {
 	return NewWithDependencies(
 		analyzer.New(),
 		graph.NewBuilder(),
+		stability.NewAnalyzer(),
 		output.NewGenerator(),
 		logger.NewLogger(logger.Config{
 			Level:  logger.LevelInfo,
@@ -49,14 +52,16 @@ func New() *Depsee {
 func NewWithDependencies(
 	analyzer analyzer.Analyzer,
 	grapher graph.GraphBuilder,
+	stabilityAnalyzer stability.Analyzer,
 	outputter output.OutputGenerator,
 	logger logger.Logger,
 ) *Depsee {
 	return &Depsee{
-		analyzer:  analyzer,
-		grapher:   grapher,
-		outputter: outputter,
-		logger:    logger,
+		analyzer:          analyzer,
+		grapher:           grapher,
+		stabilityAnalyzer: stabilityAnalyzer,
+		outputter:         outputter,
+		logger:            logger,
 	}
 }
 
@@ -112,13 +117,13 @@ func (d *Depsee) Analyze(config Config) error {
 	d.displayGraph(dependencyGraph)
 
 	// 不安定度算出
-	stability := graph.CalculateStability(dependencyGraph)
-	d.displayStability(stability)
+	stabilityResult := d.stabilityAnalyzer.Analyze(dependencyGraph)
+	d.displayStability(stabilityResult)
 
 	// SDP違反の表示
-	if len(stability.SDPViolations) > 0 {
-		d.logger.Info("SDP違反検出", "count", len(stability.SDPViolations))
-		for _, violation := range stability.SDPViolations {
+	if len(stabilityResult.SDPViolations) > 0 {
+		d.logger.Info("SDP違反検出", "count", len(stabilityResult.SDPViolations))
+		for _, violation := range stabilityResult.SDPViolations {
 			d.logger.Warn("SDP違反",
 				"from", violation.From,
 				"from_instability", violation.FromInstability,
@@ -134,9 +139,9 @@ func (d *Depsee) Analyze(config Config) error {
 	var mermaid string
 	if config.HighlightSDPViolations {
 		// SDP違反ハイライト機能を使用
-		mermaid = d.outputter.GenerateMermaidWithOptions(dependencyGraph, stability, true)
+		mermaid = d.outputter.GenerateMermaidWithOptions(dependencyGraph, stabilityResult, true)
 	} else {
-		mermaid = d.outputter.GenerateMermaid(dependencyGraph, stability)
+		mermaid = d.outputter.GenerateMermaid(dependencyGraph, stabilityResult)
 	}
 	fmt.Println("[info] Mermaid相関図:")
 	fmt.Println(mermaid)
@@ -179,15 +184,15 @@ func (d *Depsee) displayGraph(g *graph.DependencyGraph) {
 }
 
 // displayStability は不安定度を表示
-func (d *Depsee) displayStability(stability *graph.StabilityResult) {
+func (d *Depsee) displayStability(stabilityResult *stability.Result) {
 	fmt.Println("[info] ノード不安定度:")
-	for id, s := range stability.NodeStabilities {
+	for id, s := range stabilityResult.NodeStabilities {
 		fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 不安定度=%.2f\n", id, s.OutDegree, s.InDegree, s.Instability)
 	}
 
-	if len(stability.PackageStabilities) > 0 {
+	if len(stabilityResult.PackageStabilities) > 0 {
 		fmt.Println("[info] パッケージ不安定度:")
-		for pkg, s := range stability.PackageStabilities {
+		for pkg, s := range stabilityResult.PackageStabilities {
 			fmt.Printf("  %s: 依存数=%d, 非依存数=%d, 不安定度=%.2f\n", pkg, s.OutDegree, s.InDegree, s.Instability)
 		}
 	}

@@ -1,19 +1,22 @@
-package graph
+package stability
 
 import (
 	"math"
 	"testing"
+
+	"github.com/harakeishi/depsee/internal/graph"
+	"github.com/harakeishi/depsee/internal/types"
 )
 
-func TestCalculateStability(t *testing.T) {
-	g := NewDependencyGraph()
+func TestAnalyze(t *testing.T) {
+	g := graph.NewDependencyGraph()
 
 	// テスト用のノードを作成
-	nodes := []*Node{
-		{ID: "test.A", Kind: NodeStruct, Name: "A", Package: "test"},
-		{ID: "test.B", Kind: NodeStruct, Name: "B", Package: "test"},
-		{ID: "test.C", Kind: NodeStruct, Name: "C", Package: "test"},
-		{ID: "test.D", Kind: NodeStruct, Name: "D", Package: "test"},
+	nodes := []*graph.Node{
+		{ID: "test.A", Kind: graph.NodeStruct, Name: "A", Package: "test"},
+		{ID: "test.B", Kind: graph.NodeStruct, Name: "B", Package: "test"},
+		{ID: "test.C", Kind: graph.NodeStruct, Name: "C", Package: "test"},
+		{ID: "test.D", Kind: graph.NodeStruct, Name: "D", Package: "test"},
 	}
 
 	for _, node := range nodes {
@@ -29,7 +32,8 @@ func TestCalculateStability(t *testing.T) {
 	g.AddEdge("test.B", "test.C")
 	g.AddEdge("test.D", "test.A")
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	if result == nil {
 		t.Fatal("CalculateStability returned nil")
@@ -99,14 +103,15 @@ func TestCalculateStability(t *testing.T) {
 	}
 }
 
-func TestCalculateStabilityIsolatedNode(t *testing.T) {
-	g := NewDependencyGraph()
+func TestAnalyzeIsolatedNode(t *testing.T) {
+	g := graph.NewDependencyGraph()
 
 	// 孤立したノードを追加
-	node := &Node{ID: "test.Isolated", Kind: NodeStruct, Name: "Isolated", Package: "test"}
+	node := &graph.Node{ID: "test.Isolated", Kind: graph.NodeStruct, Name: "Isolated", Package: "test"}
 	g.AddNode(node)
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	if result == nil {
 		t.Fatal("CalculateStability returned nil")
@@ -131,10 +136,11 @@ func TestCalculateStabilityIsolatedNode(t *testing.T) {
 	}
 }
 
-func TestCalculateStabilityEmptyGraph(t *testing.T) {
-	g := NewDependencyGraph()
+func TestAnalyzeEmptyGraph(t *testing.T) {
+	g := graph.NewDependencyGraph()
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	if result == nil {
 		t.Fatal("CalculateStability returned nil")
@@ -146,14 +152,14 @@ func TestCalculateStabilityEmptyGraph(t *testing.T) {
 	}
 }
 
-func TestCalculateStabilityLinearChain(t *testing.T) {
-	g := NewDependencyGraph()
+func TestAnalyzeLinearChain(t *testing.T) {
+	g := graph.NewDependencyGraph()
 
 	// 線形チェーンを作成: A -> B -> C
-	nodes := []*Node{
-		{ID: "test.A", Kind: NodeStruct, Name: "A", Package: "test"},
-		{ID: "test.B", Kind: NodeStruct, Name: "B", Package: "test"},
-		{ID: "test.C", Kind: NodeStruct, Name: "C", Package: "test"},
+	nodes := []*graph.Node{
+		{ID: "test.A", Kind: graph.NodeStruct, Name: "A", Package: "test"},
+		{ID: "test.B", Kind: graph.NodeStruct, Name: "B", Package: "test"},
+		{ID: "test.C", Kind: graph.NodeStruct, Name: "C", Package: "test"},
 	}
 
 	for _, node := range nodes {
@@ -163,7 +169,8 @@ func TestCalculateStabilityLinearChain(t *testing.T) {
 	g.AddEdge("test.A", "test.B")
 	g.AddEdge("test.B", "test.C")
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	// A: Ce=1, Ca=0, I=1.0 (最も不安定)
 	aStability := result.NodeStabilities["test.A"]
@@ -186,7 +193,7 @@ func TestCalculateStabilityLinearChain(t *testing.T) {
 
 func TestNodeStabilityStruct(t *testing.T) {
 	stability := &NodeStability{
-		NodeID:      "test.Node",
+		NodeID:      types.NodeID("test.Node"),
 		OutDegree:   3,
 		InDegree:    2,
 		Instability: 0.6,
@@ -210,18 +217,18 @@ func TestNodeStabilityStruct(t *testing.T) {
 }
 
 func TestCalculatePackageStability(t *testing.T) {
-	g := NewDependencyGraph()
+	g := graph.NewDependencyGraph()
 
 	// 複数パッケージのテスト用ノードを作成
-	nodes := []*Node{
+	nodes := []*graph.Node{
 		// pkg1のノード
-		{ID: "pkg1.A", Kind: NodeStruct, Name: "A", Package: "pkg1"},
-		{ID: "pkg1.B", Kind: NodeInterface, Name: "B", Package: "pkg1"},
+		{ID: "pkg1.A", Kind: graph.NodeStruct, Name: "A", Package: "pkg1"},
+		{ID: "pkg1.B", Kind: graph.NodeInterface, Name: "B", Package: "pkg1"},
 		// pkg2のノード
-		{ID: "pkg2.C", Kind: NodeStruct, Name: "C", Package: "pkg2"},
-		{ID: "pkg2.D", Kind: NodeFunc, Name: "D", Package: "pkg2"},
+		{ID: "pkg2.C", Kind: graph.NodeStruct, Name: "C", Package: "pkg2"},
+		{ID: "pkg2.D", Kind: graph.NodeFunc, Name: "D", Package: "pkg2"},
 		// pkg3のノード
-		{ID: "pkg3.E", Kind: NodeStruct, Name: "E", Package: "pkg3"},
+		{ID: "pkg3.E", Kind: graph.NodeStruct, Name: "E", Package: "pkg3"},
 	}
 
 	for _, node := range nodes {
@@ -238,7 +245,8 @@ func TestCalculatePackageStability(t *testing.T) {
 	g.AddEdge("pkg2.C", "pkg3.E")
 	g.AddEdge("pkg1.A", "pkg1.B") // 同一パッケージ内
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	if result == nil {
 		t.Fatal("CalculateStability returned nil")
@@ -306,17 +314,17 @@ func TestCalculatePackageStability(t *testing.T) {
 	}
 }
 
-func TestCalculatePackageStabilityWithPackageNodes(t *testing.T) {
-	g := NewDependencyGraph()
+func TestAnalyzePackageWithPackageNodes(t *testing.T) {
+	g := graph.NewDependencyGraph()
 
 	// パッケージノードと通常のノードを混在させたテスト
-	nodes := []*Node{
+	nodes := []*graph.Node{
 		// 通常のノード
-		{ID: "pkg1.A", Kind: NodeStruct, Name: "A", Package: "pkg1"},
-		{ID: "pkg2.B", Kind: NodeStruct, Name: "B", Package: "pkg2"},
+		{ID: "pkg1.A", Kind: graph.NodeStruct, Name: "A", Package: "pkg1"},
+		{ID: "pkg2.B", Kind: graph.NodeStruct, Name: "B", Package: "pkg2"},
 		// パッケージノード（除外されるべき）
-		{ID: "package:pkg1", Kind: NodePackage, Name: "pkg1", Package: "pkg1"},
-		{ID: "package:pkg2", Kind: NodePackage, Name: "pkg2", Package: "pkg2"},
+		{ID: "package:pkg1", Kind: graph.NodePackage, Name: "pkg1", Package: "pkg1"},
+		{ID: "package:pkg2", Kind: graph.NodePackage, Name: "pkg2", Package: "pkg2"},
 	}
 
 	for _, node := range nodes {
@@ -327,7 +335,8 @@ func TestCalculatePackageStabilityWithPackageNodes(t *testing.T) {
 	g.AddEdge("pkg1.A", "pkg2.B")             // 通常のノード間
 	g.AddEdge("package:pkg1", "package:pkg2") // パッケージノード間（除外されるべき）
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	if result == nil {
 		t.Fatal("CalculateStability returned nil")
@@ -357,19 +366,19 @@ func TestCalculatePackageStabilityWithPackageNodes(t *testing.T) {
 	}
 }
 
-func TestCalculatePackageStabilityWithDirectPackageDependencies(t *testing.T) {
-	g := NewDependencyGraph()
+func TestAnalyzePackageWithDirectPackageDependencies(t *testing.T) {
+	g := graph.NewDependencyGraph()
 
 	// 通常のノードとパッケージノードを混在させたテスト
-	nodes := []*Node{
+	nodes := []*graph.Node{
 		// 通常のノード
-		{ID: "pkg1.A", Kind: NodeStruct, Name: "A", Package: "pkg1"},
-		{ID: "pkg2.B", Kind: NodeStruct, Name: "B", Package: "pkg2"},
-		{ID: "pkg3.C", Kind: NodeStruct, Name: "C", Package: "pkg3"},
+		{ID: "pkg1.A", Kind: graph.NodeStruct, Name: "A", Package: "pkg1"},
+		{ID: "pkg2.B", Kind: graph.NodeStruct, Name: "B", Package: "pkg2"},
+		{ID: "pkg3.C", Kind: graph.NodeStruct, Name: "C", Package: "pkg3"},
 		// パッケージノード
-		{ID: "package:pkg1", Kind: NodePackage, Name: "pkg1", Package: "pkg1"},
-		{ID: "package:pkg2", Kind: NodePackage, Name: "pkg2", Package: "pkg2"},
-		{ID: "package:pkg3", Kind: NodePackage, Name: "pkg3", Package: "pkg3"},
+		{ID: "package:pkg1", Kind: graph.NodePackage, Name: "pkg1", Package: "pkg1"},
+		{ID: "package:pkg2", Kind: graph.NodePackage, Name: "pkg2", Package: "pkg2"},
+		{ID: "package:pkg3", Kind: graph.NodePackage, Name: "pkg3", Package: "pkg3"},
 	}
 
 	for _, node := range nodes {
@@ -382,7 +391,8 @@ func TestCalculatePackageStabilityWithDirectPackageDependencies(t *testing.T) {
 	g.AddEdge("pkg1.A", "pkg2.B")
 	g.AddEdge("package:pkg2", "package:pkg3")
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	if result == nil {
 		t.Fatal("CalculateStability returned nil")
@@ -451,6 +461,12 @@ func TestCalculatePackageStabilityWithDirectPackageDependencies(t *testing.T) {
 }
 
 func TestExtractPackageNameFromNodeID(t *testing.T) {
+	extractPackageNameFromNodeID := func(nodeID string) string {
+		if len(nodeID) > 8 && nodeID[:8] == "package:" {
+			return nodeID[8:]
+		}
+		return ""
+	}
 	tests := []struct {
 		name     string
 		nodeID   string
@@ -489,12 +505,12 @@ func TestExtractPackageNameFromNodeID(t *testing.T) {
 }
 
 func TestDetectSDPViolations(t *testing.T) {
-	g := NewDependencyGraph()
+	g := graph.NewDependencyGraph()
 
 	// SDP違反を含むテスト用のノードを作成
-	nodes := []*Node{
-		{ID: "test.Stable", Kind: NodeStruct, Name: "Stable", Package: "test"},
-		{ID: "test.Unstable", Kind: NodeStruct, Name: "Unstable", Package: "test"},
+	nodes := []*graph.Node{
+		{ID: "test.Stable", Kind: graph.NodeStruct, Name: "Stable", Package: "test"},
+		{ID: "test.Unstable", Kind: graph.NodeStruct, Name: "Unstable", Package: "test"},
 	}
 
 	for _, node := range nodes {
@@ -510,7 +526,7 @@ func TestDetectSDPViolations(t *testing.T) {
 	g.AddEdge("test.Unstable", "test.Stable") // 実際は Unstable(不安定) -> Stable(安定) で正常
 
 	// 実際のSDP違反を作るため、追加のノードと依存関係を作成
-	additionalNode := &Node{ID: "test.VeryUnstable", Kind: NodeStruct, Name: "VeryUnstable", Package: "test"}
+	additionalNode := &graph.Node{ID: "test.VeryUnstable", Kind: graph.NodeStruct, Name: "VeryUnstable", Package: "test"}
 	g.AddNode(additionalNode)
 
 	// VeryUnstable -> Stable (正常: 不安定 -> 安定)
@@ -518,7 +534,8 @@ func TestDetectSDPViolations(t *testing.T) {
 	g.AddEdge("test.VeryUnstable", "test.Stable")
 	g.AddEdge("test.Stable", "test.VeryUnstable") // これがSDP違反になる
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	// 不安定度を確認
 	t.Logf("Stable不安定度: %.3f", result.NodeStabilities["test.Stable"].Instability)
@@ -559,13 +576,13 @@ func TestDetectSDPViolations(t *testing.T) {
 }
 
 func TestDetectSDPViolationsNoViolations(t *testing.T) {
-	g := NewDependencyGraph()
+	g := graph.NewDependencyGraph()
 
 	// SDP違反のない理想的な依存関係を作成
-	nodes := []*Node{
-		{ID: "test.A", Kind: NodeStruct, Name: "A", Package: "test"},
-		{ID: "test.B", Kind: NodeStruct, Name: "B", Package: "test"},
-		{ID: "test.C", Kind: NodeStruct, Name: "C", Package: "test"},
+	nodes := []*graph.Node{
+		{ID: "test.A", Kind: graph.NodeStruct, Name: "A", Package: "test"},
+		{ID: "test.B", Kind: graph.NodeStruct, Name: "B", Package: "test"},
+		{ID: "test.C", Kind: graph.NodeStruct, Name: "C", Package: "test"},
 	}
 
 	for _, node := range nodes {
@@ -577,7 +594,8 @@ func TestDetectSDPViolationsNoViolations(t *testing.T) {
 	g.AddEdge("test.A", "test.B")
 	g.AddEdge("test.B", "test.C")
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	// SDP違反がないことを確認
 	if len(result.SDPViolations) != 0 {
@@ -591,9 +609,10 @@ func TestDetectSDPViolationsNoViolations(t *testing.T) {
 }
 
 func TestDetectSDPViolationsEmptyGraph(t *testing.T) {
-	g := NewDependencyGraph()
+	g := graph.NewDependencyGraph()
 
-	result := CalculateStability(g)
+	analyzer := NewAnalyzer()
+	result := analyzer.Analyze(g)
 
 	// 空のグラフではSDP違反はない
 	if len(result.SDPViolations) != 0 {
