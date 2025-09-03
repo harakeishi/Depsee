@@ -1,342 +1,224 @@
 package analyzer
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/harakeishi/depsee/internal/analyzer/extraction"
 	"github.com/harakeishi/depsee/internal/errors"
 	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/harakeishi/depsee/internal/types"
 )
 
-type AnalysisResult struct {
-	Structs    []StructInfo
-	Interfaces []InterfaceInfo
-	Functions  []FuncInfo
-	Packages   []PackageInfo
+// Result は解析結果を格納する構造体です。
+// 解析で抽出された構造体、インターフェース、関数、パッケージの情報と
+// それらの間の依存関係情報を含みます。
+// Type aliases for common types
+type Result = types.Result
+type DependencyInfo = types.DependencyInfo
+type StructInfo = types.StructInfo
+type InterfaceInfo = types.InterfaceInfo
+type FuncInfo = types.FuncInfo
+type FieldInfo = types.FieldInfo
+type PackageInfo = types.PackageInfo
+type ImportInfo = types.ImportInfo
+
+// Filters は解析対象をフィルタリングするための条件を定義する構造体です。
+// 特定のパッケージのみを対象にしたり、特定のパッケージやディレクトリを除外したりできます。
+type Filters struct {
+	TargetPackages  []string // 解析対象のパッケージ名一覧（指定時はこれらのみが対象となる）
+	ExcludePackages []string // 解析から除外するパッケージ名一覧
+	ExcludeDirs     []string // 解析から除外するディレクトリパス一覧
 }
 
-// GoAnalyzer はGo言語の静的解析を行う具象実装
+// GoAnalyzer はGo言語の静的解析を行う具象実装です。
+// Analyzerインターフェースを実装し、Go言語のソースコードから
+// 構造体、インターフェース、関数の情報と依存関係を抽出します。
 type GoAnalyzer struct {
-	// 将来的に設定やオプションを追加可能
+	Filters   Filters  // 解析に適用するフィルタ条件
+	filesPath []string // 解析対象のGoファイルパス一覧
+	targetDir string   // 解析対象のルートディレクトリ
+	Result    *Result  // 解析結果を格納する構造体
 }
 
-// New は新しいAnalyzerを作成
+// New は新しいGoAnalyzerインスタンスを作成します。
+// Analyzerインターフェースを実装したGoAnalyzerを返します。
 func New() Analyzer {
 	return &GoAnalyzer{}
 }
 
-// NewGoAnalyzer は新しいGoAnalyzerを作成
-func NewGoAnalyzer() Analyzer {
-	return &GoAnalyzer{}
+// NewWithFilters はフィルタを指定してGoAnalyzerインスタンスを作成します。
+// 解析対象をフィルタリングする条件を初期化時に設定できます。
+func NewWithFilters(filters Filters) Analyzer {
+	return &GoAnalyzer{
+		Filters: filters,
+	}
 }
 
-// AnalyzeDir は指定ディレクトリ配下のGoファイルを再帰的に探索し、構造体・インターフェース・関数を抽出する
-func (ga *GoAnalyzer) AnalyzeDir(dir string) (*AnalysisResult, error) {
-	logger.Debug("ディレクトリ解析開始", "dir", dir)
+// SetFilters は解析時に適用するフィルタを設定します。
+// 対象パッケージの限定や除外パッケージ・ディレクトリの指定が可能です。
+// NOTE: NewWithFiltersでの初期化も可能です。
+func (ga *GoAnalyzer) SetFilters(filters Filters) {
+	ga.Filters = filters
+}
+
+// ExportResult は解析結果を取得します。
+// 解析で抽出された全ての情報（構造体、インターフェース、関数、依存関係等）を
+// 含むResultオブジェクトを返します。
+func (ga *GoAnalyzer) ExportResult() *Result {
+	return ga.Result
+}
+
+// ListTartgetFiles は指定されたディレクトリから解析対象のGoファイルをリストアップします。
+// ディレクトリを再帰的に探索し、設定されたフィルタ条件に基づいて
+// 解析対象となる.goファイル（テストファイル除く）を抽出します。
+func (ga *GoAnalyzer) ListTartgetFiles(dir string) error {
+	ga.targetDir = dir // ディレクトリを記録
+	ga.filesPath = []string{}
 
 	// ディレクトリの存在確認
 	if _, err := os.Stat(dir); err != nil {
 		logger.Error("ディレクトリが存在しません", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
+		return errors.NewAnalysisError(dir, err)
 	}
-
-	var files []string
-	errorCollector := errors.NewErrorCollector()
 
 	// ディレクトリ再帰探索
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			logger.Warn("ファイル読み込みエラー", "path", path, "error", err)
-			errorCollector.Add(errors.NewAnalysisError(path, err))
 			return nil // エラーを収集して処理を続行
 		}
-		if d.IsDir() {
-			return nil
-		}
 		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
-			files = append(files, path)
 			logger.Debug("Goファイル発見", "file", path)
+			// filterを適用
+			include, err := ga.Filters.shouldIncludeFile(path)
+			if err != nil {
+				logger.Warn("ファイルフィルタ適用失敗", "path", path, "error", err)
+				return nil // エラーを収集して処理を続行
+			}
+			if include {
+				ga.filesPath = append(ga.filesPath, path)
+			}
 		}
 		return nil
 	})
 	if err != nil {
 		logger.Error("ディレクトリ探索失敗", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
+		return errors.NewAnalysisError(dir, err)
 	}
 
-	logger.Info("Goファイル発見完了", "count", len(files))
+	return nil
+}
 
+// shouldIncludeFile は指定されたファイルがフィルタ条件に適合するかどうかを判定します。
+// パッケージ名をパースし、対象パッケージ、除外パッケージ、除外ディレクトリの条件をチェックします。
+func (f Filters) shouldIncludeFile(path string) (bool, error) {
 	fset := token.NewFileSet()
-	result := &AnalysisResult{}
 
-	for _, file := range files {
-		f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
-		if err != nil {
-			logger.Warn("ファイルパース失敗", "file", file, "error", err)
-			errorCollector.Add(errors.NewAnalysisError(file, err))
-			continue // パースエラーがあっても他のファイルは処理を続行
-		}
-		analyzeFile(f, fset, file, result)
-	}
-
-	// 重大なエラーがある場合は失敗とする
-	if errorCollector.HasErrors() {
-		logger.Warn("解析中にエラーが発生しました", "error_count", len(errorCollector.Errors()))
-		// 部分的な結果でも返す（警告として扱う）
-	}
-
-	return result, nil
-}
-
-// 後方互換性のためのラッパー関数
-func AnalyzeDir(dir string) (*AnalysisResult, error) {
-	analyzer := NewGoAnalyzer()
-	return analyzer.AnalyzeDir(dir)
-}
-
-// AnalyzeDirWithPackageFilter は指定されたパッケージのみを解析対象とする
-func (ga *GoAnalyzer) AnalyzeDirWithPackageFilter(dir string, targetPackages []string) (*AnalysisResult, error) {
-	logger.Debug("パッケージフィルタ付きディレクトリ解析開始", "dir", dir, "target_packages", targetPackages)
-
-	// 全体解析を実行
-	result, err := ga.AnalyzeDir(dir)
+	file, err := parser.ParseFile(fset, path, nil, parser.PackageClauseOnly)
 	if err != nil {
-		return nil, err
+		logger.Warn("ファイルパース失敗", "path", path, "error", err)
+		return false, err
+	}
+	packageName := file.Name.Name
+	// ターゲットパッケージのチェック(もし含まれていなかったら早期リターン)
+	if !slices.Contains(f.TargetPackages, packageName) && len(f.TargetPackages) > 0 {
+		return false, nil
+	}
+	// 除外パッケージのチェック(もし含まれていたら早期リターン)
+	if slices.Contains(f.ExcludePackages, packageName) && len(f.ExcludePackages) > 0 {
+		return false, nil
 	}
 
-	// パッケージフィルタリングが指定されていない場合は全結果を返す
-	if len(targetPackages) == 0 {
-		return result, nil
-	}
-
-	// 対象パッケージのセットを作成
-	targetSet := make(map[string]bool)
-	for _, pkg := range targetPackages {
-		targetSet[pkg] = true
-	}
-
-	// フィルタリング実行
-	filteredResult := &AnalysisResult{}
-
-	// 構造体のフィルタリング
-	for _, s := range result.Structs {
-		if targetSet[s.Package] {
-			filteredResult.Structs = append(filteredResult.Structs, s)
+	// 除外ディレクトリのチェック(もし含まれていたら早期リターン)
+	if len(f.ExcludeDirs) > 0 && len(f.ExcludeDirs) > 0 {
+		for _, excludeDir := range f.ExcludeDirs {
+			rel, err := filepath.Rel(excludeDir, path)
+			if err != nil {
+				logger.Warn("ディレクトリ相対パス取得失敗", "path", path, "error", err)
+				return false, err
+			}
+			// パスに..が含まれていない場合(つまりディレクトリが一致していたら)は早期リターン
+			if !strings.Contains(rel, "..") {
+				return false, nil
+			}
 		}
 	}
-
-	// インターフェースのフィルタリング
-	for _, i := range result.Interfaces {
-		if targetSet[i.Package] {
-			filteredResult.Interfaces = append(filteredResult.Interfaces, i)
-		}
-	}
-
-	// 関数のフィルタリング
-	for _, f := range result.Functions {
-		if targetSet[f.Package] {
-			filteredResult.Functions = append(filteredResult.Functions, f)
-		}
-	}
-
-	// パッケージのフィルタリング
-	for _, p := range result.Packages {
-		if targetSet[p.Name] {
-			filteredResult.Packages = append(filteredResult.Packages, p)
-		}
-	}
-
-	logger.Info("パッケージフィルタリング完了",
-		"original_structs", len(result.Structs), "filtered_structs", len(filteredResult.Structs),
-		"original_interfaces", len(result.Interfaces), "filtered_interfaces", len(filteredResult.Interfaces),
-		"original_functions", len(result.Functions), "filtered_functions", len(filteredResult.Functions),
-		"original_packages", len(result.Packages), "filtered_packages", len(filteredResult.Packages))
-
-	return filteredResult, nil
+	return true, nil
 }
 
-// AnalyzeDirWithFilters は指定されたパッケージ・ディレクトリの除外機能付きで解析を行う
-func (ga *GoAnalyzer) AnalyzeDirWithFilters(dir string, targetPackages []string, excludePackages []string, excludeDirs []string) (*AnalysisResult, error) {
-	logger.Debug("フィルタ付きディレクトリ解析開始", "dir", dir,
-		"target_packages", targetPackages,
-		"exclude_packages", excludePackages,
-		"exclude_dirs", excludeDirs)
-
-	// ディレクトリの存在確認
-	if _, err := os.Stat(dir); err != nil {
-		logger.Error("ディレクトリが存在しません", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
+// Analyze は実際のコード解析を実行します。
+// リストアップされた全ての対象ファイルをパースし、構造体、インターフェース、関数を抽出し、
+// 最終的に依存関係を分析して解析結果を構築します。
+func (ga *GoAnalyzer) Analyze() error {
+	if len(ga.filesPath) == 0 {
+		return errors.NewAnalysisError("解析対象のファイルが存在しません", nil)
 	}
-
-	var files []string
+	ga.Result = &Result{}
+	fset := token.NewFileSet()
 	errorCollector := errors.NewErrorCollector()
 
-	// 除外ディレクトリのセットを作成
-	excludeDirSet := make(map[string]bool)
-	for _, excludeDir := range excludeDirs {
-		excludeDirSet[strings.TrimSpace(excludeDir)] = true
-	}
-
-	// ディレクトリ再帰探索（除外ディレクトリをスキップ）
-	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			logger.Warn("ファイル読み込みエラー", "path", path, "error", err)
-			errorCollector.Add(errors.NewAnalysisError(path, err))
-			return nil // エラーを収集して処理を続行
-		}
-
-		// ディレクトリの除外チェック
-		if d.IsDir() {
-			relPath, _ := filepath.Rel(dir, path)
-			if shouldExcludeDir(relPath, excludeDirSet) {
-				logger.Debug("ディレクトリを除外", "path", relPath)
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, "_test.go") {
-			files = append(files, path)
-			logger.Debug("Goファイル発見", "file", path)
-		}
-		return nil
-	})
-	if err != nil {
-		logger.Error("ディレクトリ探索失敗", "dir", dir, "error", err)
-		return nil, errors.NewAnalysisError(dir, err)
-	}
-
-	logger.Info("Goファイル発見完了", "count", len(files))
-
-	fset := token.NewFileSet()
-	result := &AnalysisResult{}
-
-	for _, file := range files {
+	for _, file := range ga.filesPath {
+		// 解析処理
+		fmt.Println(file)
 		f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
 		if err != nil {
 			logger.Warn("ファイルパース失敗", "file", file, "error", err)
 			errorCollector.Add(errors.NewAnalysisError(file, err))
 			continue // パースエラーがあっても他のファイルは処理を続行
 		}
-		analyzeFile(f, fset, file, result)
+		analyzeFile(f, fset, file, ga.Result)
 	}
 
-	// 重大なエラーがある場合は失敗とする
-	if errorCollector.HasErrors() {
-		logger.Warn("解析中にエラーが発生しました", "error_count", len(errorCollector.Errors()))
-		// 部分的な結果でも返す（警告として扱う）
-	}
+	// 依存関係解析を実行
+	dependencies := ga.extractDependencies(ga.Result, ga.targetDir)
+	ga.Result.Dependencies = dependencies
 
-	// パッケージフィルタリングを適用
-	filteredResult := applyPackageFilters(result, targetPackages, excludePackages)
-
-	logger.Info("フィルタリング完了",
-		"original_structs", len(result.Structs), "filtered_structs", len(filteredResult.Structs),
-		"original_interfaces", len(result.Interfaces), "filtered_interfaces", len(filteredResult.Interfaces),
-		"original_functions", len(result.Functions), "filtered_functions", len(filteredResult.Functions),
-		"original_packages", len(result.Packages), "filtered_packages", len(filteredResult.Packages))
-
-	return filteredResult, nil
+	logger.Info("解析完了", "files", len(ga.filesPath), "structs", len(ga.Result.Structs), "interfaces", len(ga.Result.Interfaces), "functions", len(ga.Result.Functions), "packages", len(ga.Result.Packages), "dependencies", len(ga.Result.Dependencies))
+	return nil
 }
 
-// shouldExcludeDir は指定されたディレクトリが除外対象かどうかを判定
-func shouldExcludeDir(relPath string, excludeDirSet map[string]bool) bool {
-	if relPath == "." {
-		return false
+// extractDependencies は解析結果から依存関係を抽出します。
+// 複数の依存関係抽出戦略（フィールド、シグネチャ、関数呼び出し、パッケージ間）を使用して
+// 包括的な依存関係情報を収集します。
+func (ga *GoAnalyzer) extractDependencies(result *Result, targetDir string) []DependencyInfo {
+	logger.Info("依存関係解析開始")
+
+	var allDependencies []DependencyInfo
+
+	// 新しいstrategyベース依存関係抽出を使用
+	strategyExtractor := extraction.DefaultStrategyBasedExtractor(targetDir)
+
+	// 解析済みファイルから依存関係を抽出
+	extractionDeps, err := strategyExtractor.ExtractFromFiles(ga.filesPath)
+	if err != nil {
+		logger.Error("strategy依存関係抽出エラー", "error", err)
+		return allDependencies
 	}
 
-	// 完全一致チェック
-	if excludeDirSet[relPath] {
-		return true
+	// extraction.DependencyInfo を analyzer.DependencyInfo に変換
+	for _, dep := range extractionDeps {
+		allDependencies = append(allDependencies, DependencyInfo{
+			From: dep.From,
+			To:   dep.To,
+			Type: dep.Type,
+		})
 	}
 
-	// パスの各部分をチェック（例：vendor/github.com/... の場合、vendorで除外）
-	parts := strings.Split(relPath, string(filepath.Separator))
-	for _, part := range parts {
-		if excludeDirSet[part] {
-			return true
-		}
-	}
-
-	return false
+	logger.Info("依存関係解析完了", "total_dependencies", len(allDependencies))
+	return allDependencies
 }
 
-// applyPackageFilters はターゲットパッケージと除外パッケージのフィルタリングを適用
-func applyPackageFilters(result *AnalysisResult, targetPackages []string, excludePackages []string) *AnalysisResult {
-	// ターゲットパッケージのセットを作成
-	var targetSet map[string]bool
-	if len(targetPackages) > 0 {
-		targetSet = make(map[string]bool)
-		for _, pkg := range targetPackages {
-			targetSet[strings.TrimSpace(pkg)] = true
-		}
-	}
-
-	// 除外パッケージのセットを作成
-	excludeSet := make(map[string]bool)
-	for _, pkg := range excludePackages {
-		excludeSet[strings.TrimSpace(pkg)] = true
-	}
-
-	filteredResult := &AnalysisResult{}
-
-	// 構造体のフィルタリング
-	for _, s := range result.Structs {
-		if shouldIncludePackage(s.Package, targetSet, excludeSet) {
-			filteredResult.Structs = append(filteredResult.Structs, s)
-		}
-	}
-
-	// インターフェースのフィルタリング
-	for _, i := range result.Interfaces {
-		if shouldIncludePackage(i.Package, targetSet, excludeSet) {
-			filteredResult.Interfaces = append(filteredResult.Interfaces, i)
-		}
-	}
-
-	// 関数のフィルタリング
-	for _, f := range result.Functions {
-		if shouldIncludePackage(f.Package, targetSet, excludeSet) {
-			filteredResult.Functions = append(filteredResult.Functions, f)
-		}
-	}
-
-	// パッケージのフィルタリング
-	for _, p := range result.Packages {
-		if shouldIncludePackage(p.Name, targetSet, excludeSet) {
-			filteredResult.Packages = append(filteredResult.Packages, p)
-		}
-	}
-
-	return filteredResult
-}
-
-// shouldIncludePackage はパッケージが含まれるべきかどうかを判定
-func shouldIncludePackage(packageName string, targetSet map[string]bool, excludeSet map[string]bool) bool {
-	// 除外パッケージに含まれている場合は除外
-	if excludeSet[packageName] {
-		return false
-	}
-
-	// ターゲットパッケージが指定されている場合は、それに含まれているもののみ
-	if targetSet != nil {
-		return targetSet[packageName]
-	}
-
-	// ターゲットパッケージが指定されていない場合は、除外されていなければ含める
-	return true
-}
-
-// analyzeFile: ASTを走査し、構造体・インターフェース・関数・メソッドを抽出
-func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *AnalysisResult) {
-	pkgName := f.Name.Name
-	structMap := map[string]*StructInfo{}
-
-	// 0th pass: import文の解析
+// extractImports はASTファイルからimport文を解析してImportInfoのスライスを返します。
+// importパスとエイリアス情報を抽出し、エイリアスが指定されていない場合は
+// importパスからパッケージ名を自動抽出します。
+func extractImports(f *ast.File) []ImportInfo {
 	imports := []ImportInfo{}
 	for _, imp := range f.Imports {
 		importPath := strings.Trim(imp.Path.Value, `"`)
@@ -357,71 +239,15 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Analysis
 			Alias: alias,
 		})
 	}
+	return imports
+}
 
-	// パッケージ情報を追加
-	pos := fset.Position(f.Name.Pos())
-	packageInfo := PackageInfo{
-		Name:     pkgName,
-		Path:     "", // TODO: パッケージパスの取得
-		File:     file,
-		Position: pos,
-		Imports:  imports,
-	}
-	result.Packages = append(result.Packages, packageInfo)
+// extractFunctions はASTファイルから関数・メソッドを解析します。
+// 関数宣言を走査し、関数名、引数、戻り値、レシーバ情報、関数本体の呼び出し情報を抽出します。
+// メソッドの場合は対応する構造体のStructInfoに関連付けられます。
+func extractFunctions(f *ast.File, fset *token.FileSet, file string, pkgName string, structMap map[string]*StructInfo) []FuncInfo {
+	var functions []FuncInfo
 
-	// 1st pass: type宣言（構造体・インターフェース）
-	for _, decl := range f.Decls {
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok || genDecl.Tok != token.TYPE {
-			continue
-		}
-		for _, spec := range genDecl.Specs {
-			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok {
-				continue
-			}
-			pos := fset.Position(typeSpec.Pos())
-			switch t := typeSpec.Type.(type) {
-			case *ast.StructType:
-				fields := []FieldInfo{}
-				for _, field := range t.Fields.List {
-					// フィールド名（複数可）
-					for _, name := range field.Names {
-						fields = append(fields, FieldInfo{
-							Name: name.Name,
-							Type: exprToTypeString(field.Type),
-						})
-					}
-					// 無名フィールド（埋め込み）
-					if len(field.Names) == 0 {
-						fields = append(fields, FieldInfo{
-							Name: "",
-							Type: exprToTypeString(field.Type),
-						})
-					}
-				}
-				si := StructInfo{
-					Name:     typeSpec.Name.Name,
-					Package:  pkgName,
-					File:     file,
-					Position: pos,
-					Fields:   fields,
-				}
-				structMap[si.Name] = &si
-				result.Structs = append(result.Structs, si)
-			case *ast.InterfaceType:
-				ii := InterfaceInfo{
-					Name:     typeSpec.Name.Name,
-					Package:  pkgName,
-					File:     file,
-					Position: pos,
-				}
-				result.Interfaces = append(result.Interfaces, ii)
-			}
-		}
-	}
-
-	// 2nd pass: 関数・メソッド
 	for _, decl := range f.Decls {
 		funcDecl, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -472,33 +298,121 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Analysis
 				}
 			}
 			fi.Receiver = recvType
+			fi.BodyCalls = extractBodyCalls(funcDecl.Body)
 			if s, ok := structMap[recvType]; ok {
 				s.Methods = append(s.Methods, fi)
-				// 構造体リストも更新
-				for i := range result.Structs {
-					if result.Structs[i].Name == recvType {
-						result.Structs[i] = *s
-					}
-				}
 			}
 		} else {
 			// 通常の関数
 			// --- 関数本体の呼び出し関数名抽出 ---
 			fi.BodyCalls = extractBodyCalls(funcDecl.Body)
-			result.Functions = append(result.Functions, fi)
+			functions = append(functions, fi)
 		}
 	}
-	// 構造体メソッドにもBodyCallsを追加
-	for _, s := range structMap {
-		for i, m := range s.Methods {
-			if m.Position.IsValid() {
-				s.Methods[i].BodyCalls = extractBodyCalls(findFuncDeclByName(f, m.Name))
+	return functions
+}
+
+// extractTypes はASTファイルから型宣言（構造体・インターフェース）を解析します。
+// type宣言を走査し、構造体のフィールド情報やインターフェースのメソッドシグネチャを抽出します。
+// 構造体については後でメソッドを関連付けるためのマップも返します。
+func extractTypes(f *ast.File, fset *token.FileSet, file string, pkgName string) ([]StructInfo, []InterfaceInfo, map[string]*StructInfo) {
+	var structs []StructInfo
+	var interfaces []InterfaceInfo
+	structMap := map[string]*StructInfo{}
+
+	for _, decl := range f.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
 			}
+			pos := fset.Position(typeSpec.Pos())
+			switch t := typeSpec.Type.(type) {
+			case *ast.StructType:
+				fields := []FieldInfo{}
+				for _, field := range t.Fields.List {
+					// フィールド名（複数可）
+					for _, name := range field.Names {
+						fields = append(fields, FieldInfo{
+							Name: name.Name,
+							Type: exprToTypeString(field.Type),
+						})
+					}
+					// 無名フィールド（埋め込み）
+					if len(field.Names) == 0 {
+						fields = append(fields, FieldInfo{
+							Name: "",
+							Type: exprToTypeString(field.Type),
+						})
+					}
+				}
+				si := StructInfo{
+					Name:     typeSpec.Name.Name,
+					Package:  pkgName,
+					File:     file,
+					Position: pos,
+					Fields:   fields,
+				}
+				structMap[si.Name] = &si
+				structs = append(structs, si)
+			case *ast.InterfaceType:
+				ii := InterfaceInfo{
+					Name:     typeSpec.Name.Name,
+					Package:  pkgName,
+					File:     file,
+					Position: pos,
+				}
+				interfaces = append(interfaces, ii)
+			}
+		}
+	}
+	return structs, interfaces, structMap
+}
+
+// analyzeFile は単一のGoファイルのASTを走査し、構造体・インターフェース・関数・メソッドを抽出します。
+// パッケージ情報、import文、型宣言、関数宣言を順序立てて処理し、
+// 抽出した情報を結果オブジェクトに追加します。
+func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) {
+	pkgName := f.Name.Name
+
+	// 0th pass: import文の解析
+	imports := extractImports(f)
+
+	// パッケージ情報を追加
+	pos := fset.Position(f.Name.Pos())
+	packageInfo := PackageInfo{
+		Name:     pkgName,
+		Path:     "", // TODO: パッケージパスの取得
+		File:     file,
+		Position: pos,
+		Imports:  imports,
+	}
+	result.Packages = append(result.Packages, packageInfo)
+
+	// 1st pass: type宣言（構造体・インターフェース）
+	structs, interfaces, structMap := extractTypes(f, fset, file, pkgName)
+	result.Structs = append(result.Structs, structs...)
+	result.Interfaces = append(result.Interfaces, interfaces...)
+
+	// 2nd pass: 関数・メソッド
+	functions := extractFunctions(f, fset, file, pkgName, structMap)
+	result.Functions = append(result.Functions, functions...)
+
+	// 構造体リストの更新（メソッドが追加されたstructMapの内容を反映）
+	for i, structInfo := range result.Structs {
+		if s, exists := structMap[structInfo.Name]; exists {
+			result.Structs[i] = *s
 		}
 	}
 }
 
-// 型表現を文字列化するユーティリティ
+// exprToTypeString はASTの型表現を文字列に変換するユーティリティ関数です。
+// 基本型、ポインタ、セレクタ、配列、マップ、インターフェース等の
+// 型表現を適切な文字列表現に変換します。
 func exprToTypeString(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.Ident:
@@ -518,7 +432,9 @@ func exprToTypeString(expr ast.Expr) string {
 	}
 }
 
-// 関数本体から呼び出している関数名リストを抽出
+// extractBodyCalls は関数本体から呼び出している関数名リストを抽出します。
+// 関数呼び出し、メソッド呼び出し、構造体リテラルの作成等を検出し、
+// 依存関係分析のための呼び出し情報を収集します。
 func extractBodyCalls(body *ast.BlockStmt) []string {
 	calls := []string{}
 	if body == nil {
@@ -557,16 +473,4 @@ func extractBodyCalls(body *ast.BlockStmt) []string {
 		return true
 	})
 	return calls
-}
-
-// 名前からFuncDeclを探す（同一ファイル内のみ）
-func findFuncDeclByName(f *ast.File, name string) *ast.BlockStmt {
-	for _, decl := range f.Decls {
-		if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-			if funcDecl.Name.Name == name {
-				return funcDecl.Body
-			}
-		}
-	}
-	return nil
 }

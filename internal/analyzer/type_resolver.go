@@ -11,14 +11,17 @@ import (
 	"github.com/harakeishi/depsee/internal/logger"
 )
 
-// TypeResolver は型情報を解決するための構造体
+// TypeResolver は型情報を解決するための構造体です。
+// Go言語の型チェッカーを使用して正確な型情報を取得し、
+// 型名の解決やパッケージ情報の管理を行います。
 type TypeResolver struct {
-	fset     *token.FileSet
-	packages map[string]*types.Package
-	info     *types.Info
+	fset     *token.FileSet             // ファイル位置情報の管理
+	packages map[string]*types.Package  // パッケージ名から型情報へのマッピング
+	info     *types.Info               // 型チェック結果の詳細情報
 }
 
-// NewTypeResolver は新しいTypeResolverを作成
+// NewTypeResolver は新しいTypeResolverを作成します。
+// 型解決に必要な内部構造を初期化します。
 func NewTypeResolver() *TypeResolver {
 	return &TypeResolver{
 		fset:     token.NewFileSet(),
@@ -31,7 +34,8 @@ func NewTypeResolver() *TypeResolver {
 	}
 }
 
-// ResolvePackage はパッケージの型情報を解決
+// ResolvePackage は指定されたディレクトリのパッケージの型情報を解決します。
+// パッケージ内のGoファイルをパースし、型チェッカーで型情報を取得します。
 func (tr *TypeResolver) ResolvePackage(dir string) error {
 	logger.Debug("パッケージ型解析開始", "dir", dir)
 
@@ -79,7 +83,9 @@ func (tr *TypeResolver) ResolvePackage(dir string) error {
 	return nil
 }
 
-// ResolveType は型表現から正確な型名を解決
+// ResolveType は型表現から正確な型名を解決します。
+// 型チェック情報が利用可能な場合はそれを使用し、
+// 利用できない場合はフォールバック処理を行います。
 func (tr *TypeResolver) ResolveType(expr ast.Expr) string {
 	if tr.info == nil {
 		return tr.fallbackTypeResolution(expr)
@@ -92,7 +98,9 @@ func (tr *TypeResolver) ResolveType(expr ast.Expr) string {
 	return tr.fallbackTypeResolution(expr)
 }
 
-// formatType は型情報を文字列に変換
+// formatType は型情報を文字列に変換します。
+// 名前付き型、ポインタ、スライス、配列、マップ、インターフェース、基本型を
+// 適切な文字列表現に変換します。
 func (tr *TypeResolver) formatType(t types.Type) string {
 	switch typ := t.(type) {
 	case *types.Named:
@@ -121,22 +129,28 @@ func (tr *TypeResolver) formatType(t types.Type) string {
 	}
 }
 
-// fallbackTypeResolution はgo/typesが使用できない場合のフォールバック
+// fallbackTypeResolution はgo/typesが使用できない場合のフォールバック処理です。
+// 型チェック情報が利用できない場合に、ASTから直接型情報を抽出します。
 func (tr *TypeResolver) fallbackTypeResolution(expr ast.Expr) string {
 	return exprToTypeString(expr)
 }
 
-// GetPackageInfo はパッケージ情報を取得
+// GetPackageInfo は指定されたパッケージ名のパッケージ情報を取得します。
+// 型解決済みのパッケージ情報が存在する場合はそれを返し、
+// 存在しない場合はnilを返します。
 func (tr *TypeResolver) GetPackageInfo(pkgName string) *types.Package {
 	return tr.packages[pkgName]
 }
 
-// IsExternalType は外部パッケージの型かどうかを判定
+// IsExternalType は指定された型名が外部パッケージの型かどうかを判定します。
+// 型名にパッケージ修飾子（ドット）が含まれている場合はtrueを返します。
 func (tr *TypeResolver) IsExternalType(typeName string) bool {
 	return strings.Contains(typeName, ".")
 }
 
-// ExtractPackageName は型名からパッケージ名を抽出
+// ExtractPackageName は型名からパッケージ名を抽出します。
+// "package.Type"形式の型名から"package"部分を取得します。
+// パッケージ修飾子がない場合は空文字を返します。
 func (tr *TypeResolver) ExtractPackageName(typeName string) string {
 	if idx := strings.LastIndex(typeName, "."); idx != -1 {
 		return typeName[:idx]
@@ -144,7 +158,9 @@ func (tr *TypeResolver) ExtractPackageName(typeName string) string {
 	return ""
 }
 
-// ExtractTypeName は型名から型名部分のみを抽出
+// ExtractTypeName は型名から型名部分のみを抽出します。
+// "package.Type"形式の型名から"Type"部分を取得します。
+// パッケージ修飾子がない場合は元の型名をそのまま返します。
 func (tr *TypeResolver) ExtractTypeName(typeName string) string {
 	if idx := strings.LastIndex(typeName, "."); idx != -1 {
 		return typeName[idx+1:]

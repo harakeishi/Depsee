@@ -2,13 +2,11 @@ package graph
 
 import "github.com/harakeishi/depsee/internal/analyzer"
 
-// GraphBuilder は依存グラフを構築するインターフェース
+// GraphBuilder defines the interface for building dependency graphs
 type GraphBuilder interface {
-	BuildDependencyGraph(result *analyzer.AnalysisResult) *DependencyGraph
-	BuildDependencyGraphWithPackages(result *analyzer.AnalysisResult, targetDir string) *DependencyGraph
-}
-
-// StabilityCalculator は安定度を計算するインターフェース
-type StabilityCalculator interface {
-	CalculateStability(graph *DependencyGraph) *StabilityResult
+	// BuildDependencyGraph builds a dependency graph from analysis results
+	BuildDependencyGraph(result *analyzer.Result) *DependencyGraph
+	
+	// BuildDependencyGraphWithPackages builds a dependency graph including package dependencies
+	BuildDependencyGraphWithPackages(result *analyzer.Result, targetDir string) *DependencyGraph
 }

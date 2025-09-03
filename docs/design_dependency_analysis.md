@@ -86,7 +86,7 @@ type DependencyGraph struct {
 
 // 依存関係抽出の戦略パターン
 type DependencyExtractor interface {
-    Extract(result *analyzer.AnalysisResult, graph *DependencyGraph)
+    Extract(result *analyzer.Result, graph *DependencyGraph)
 }
 
 // フィールド依存抽出

@@ -1,8 +1,30 @@
 package analyzer
 
-// Analyzer はコード解析を行うインターフェース
+// Analyzer はコード解析を行うインターフェースです。
+// Go言語のソースコードを解析し、構造体、インターフェース、関数の情報と
+// それらの依存関係を抽出する機能を提供します。
 type Analyzer interface {
-	AnalyzeDir(dir string) (*AnalysisResult, error)
-	AnalyzeDirWithPackageFilter(dir string, targetPackages []string) (*AnalysisResult, error)
-	AnalyzeDirWithFilters(dir string, targetPackages []string, excludePackages []string, excludeDirs []string) (*AnalysisResult, error)
+	// SetFilters は解析時に適用するフィルタを設定します。
+	// 対象パッケージの指定や除外パッケージ・ディレクトリの設定が可能です。
+	SetFilters(filters Filters)
+
+	// ListTartgetFiles は指定されたディレクトリから解析対象のGoファイルをリストアップします。
+	// 設定されたフィルタに基づいて対象ファイルを決定します。
+	ListTartgetFiles(dir string) error
+
+	// Analyze は実際のコード解析を実行します。
+	// 構造体、インターフェース、関数の抽出と依存関係の分析を行います。
+	Analyze() error
+
+	// ExportResult は解析結果を取得します。
+	// 解析で得られた全ての情報を含むResultオブジェクトを返します。
+	ExportResult() *Result
 }
+
+/*
+Analyzerの責務:
+- 指定ディレクトリ配下のGoファイルを再帰的に探索し、構造体・インターフェース・関数を抽出する
+- パッケージが指定されている場合、指定されたパッケージのみを解析対象とする
+- 構造体、インターフェース、関数の依存関係を抽出する
+- フィールド依存関係、シグネチャ依存関係、呼び出し依存関係、パッケージ間依存関係を分析する
+*/

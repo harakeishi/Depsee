@@ -6,6 +6,7 @@ import (
 
 	"github.com/harakeishi/depsee/internal/analyzer"
 	"github.com/harakeishi/depsee/internal/logger"
+	"github.com/harakeishi/depsee/internal/types"
 )
 
 func TestMain(m *testing.M) {
@@ -103,7 +104,7 @@ func TestAddEdge(t *testing.T) {
 
 func TestBuildDependencyGraph(t *testing.T) {
 	// テスト用の解析結果を作成
-	result := &analyzer.AnalysisResult{
+	result := &analyzer.Result{
 		Structs: []analyzer.StructInfo{
 			{
 				Name:    "User",
@@ -143,6 +144,18 @@ func TestBuildDependencyGraph(t *testing.T) {
 				},
 			},
 		},
+		Dependencies: []analyzer.DependencyInfo{
+			{
+				From: types.NodeID("test.User"),
+				To:   types.NodeID("test.Profile"),
+				Type: types.FieldDependency,
+			},
+			{
+				From: types.NodeID("test.CreateUser"),
+				To:   types.NodeID("test.User"),
+				Type: types.SignatureDependency,
+			},
+		},
 	}
 
 	g := BuildDependencyGraph(result)
@@ -160,7 +173,7 @@ func TestBuildDependencyGraph(t *testing.T) {
 	// 特定のノードの存在確認
 	expectedNodes := []string{"test.User", "test.Profile", "test.UserService", "test.CreateUser"}
 	for _, nodeID := range expectedNodes {
-		if _, exists := g.Nodes[NodeID(nodeID)]; !exists {
+		if _, exists := g.Nodes[types.NodeID(nodeID)]; !exists {
 			t.Errorf("Expected node '%s' not found", nodeID)
 		}
 	}
@@ -179,7 +192,7 @@ func TestBuildDependencyGraph(t *testing.T) {
 func TestRegisterNodes(t *testing.T) {
 	g := NewDependencyGraph()
 
-	result := &analyzer.AnalysisResult{
+	result := &analyzer.Result{
 		Structs: []analyzer.StructInfo{
 			{Name: "TestStruct", Package: "test", File: "test.go"},
 		},
@@ -204,7 +217,7 @@ func TestRegisterNodes(t *testing.T) {
 	}
 
 	for nodeID, expectedKind := range expectedNodes {
-		node, exists := g.Nodes[NodeID(nodeID)]
+		node, exists := g.Nodes[types.NodeID(nodeID)]
 		if !exists {
 			t.Errorf("Expected node '%s' not found", nodeID)
 			continue

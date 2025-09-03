@@ -6,7 +6,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/harakeishi/depsee/internal/analyzer/stability"
 	"github.com/harakeishi/depsee/internal/graph"
+	"github.com/harakeishi/depsee/internal/types"
 )
 
 // mermaidの予約語リスト
@@ -95,7 +97,7 @@ func escapeNodeLabel(label string) string {
 
 // nodeWithStability は不安定度情報を含むノード
 type nodeWithStability struct {
-	ID          graph.NodeID
+	ID          types.NodeID
 	Name        string
 	Kind        graph.NodeKind
 	Package     string
@@ -103,12 +105,12 @@ type nodeWithStability struct {
 	SafeID      string
 }
 
-func GenerateMermaid(g *graph.DependencyGraph, stability *graph.StabilityResult) string {
-	return GenerateMermaidWithOptions(g, stability, false)
+func GenerateMermaid(g *graph.DependencyGraph, stabilityResult *stability.Result) string {
+	return GenerateMermaidWithOptions(g, stabilityResult, false)
 }
 
 // GenerateMermaidWithOptions はオプション付きでMermaid記法の相関図を生成
-func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.StabilityResult, highlightSDPViolations bool) string {
+func GenerateMermaidWithOptions(g *graph.DependencyGraph, stabilityResult *stability.Result, highlightSDPViolations bool) string {
 
 	// パッケージごとにノードをグループ化（パッケージノードは除外）
 	packageNodes := make(map[string][]nodeWithStability)
@@ -120,7 +122,7 @@ func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.Stabi
 		}
 
 		inst := 0.0
-		if s, ok := stability.NodeStabilities[id]; ok {
+		if s, ok := stabilityResult.NodeStabilities[id]; ok {
 			inst = s.Instability
 		}
 
@@ -153,13 +155,13 @@ func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.Stabi
 	sort.Strings(packages)
 
 	// ノードIDのマッピングを作成
-	idMapping := make(map[graph.NodeID]string)
+	idMapping := make(map[types.NodeID]string)
 
 	// SDP違反のエッジを特定（ハイライト機能が有効な場合）
 	var sdpViolationEdges map[string]bool
 	if highlightSDPViolations {
 		sdpViolationEdges = make(map[string]bool)
-		for _, violation := range stability.SDPViolations {
+		for _, violation := range stabilityResult.SDPViolations {
 			edgeKey := fmt.Sprintf("%s->%s", violation.From, violation.To)
 			sdpViolationEdges[edgeKey] = true
 		}
@@ -174,7 +176,7 @@ func GenerateMermaidWithOptions(g *graph.DependencyGraph, stability *graph.Stabi
 
 		// パッケージの不安定度を取得
 		packageInstability := 0.0
-		if pkgStability, ok := stability.PackageStabilities[pkg]; ok {
+		if pkgStability, ok := stabilityResult.PackageStabilities[pkg]; ok {
 			packageInstability = pkgStability.Instability
 		}
 
