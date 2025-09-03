@@ -178,6 +178,74 @@ func extractImports(f *ast.File) []ImportInfo {
 	return imports
 }
 
+// extractFunctions はASTファイルから関数・メソッドを解析する
+func extractFunctions(f *ast.File, fset *token.FileSet, file string, pkgName string, structMap map[string]*StructInfo) []FuncInfo {
+	var functions []FuncInfo
+
+	for _, decl := range f.Decls {
+		funcDecl, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		pos := fset.Position(funcDecl.Pos())
+		params := []FieldInfo{}
+		if funcDecl.Type.Params != nil {
+			for _, field := range funcDecl.Type.Params.List {
+				typeStr := exprToTypeString(field.Type)
+				for _, name := range field.Names {
+					params = append(params, FieldInfo{Name: name.Name, Type: typeStr})
+				}
+				if len(field.Names) == 0 {
+					params = append(params, FieldInfo{Name: "", Type: typeStr})
+				}
+			}
+		}
+		results := []FieldInfo{}
+		if funcDecl.Type.Results != nil {
+			for _, field := range funcDecl.Type.Results.List {
+				typeStr := exprToTypeString(field.Type)
+				for _, name := range field.Names {
+					results = append(results, FieldInfo{Name: name.Name, Type: typeStr})
+				}
+				if len(field.Names) == 0 {
+					results = append(results, FieldInfo{Name: "", Type: typeStr})
+				}
+			}
+		}
+		fi := FuncInfo{
+			Name:     funcDecl.Name.Name,
+			Package:  pkgName,
+			File:     file,
+			Position: pos,
+			Params:   params,
+			Results:  results,
+		}
+		// メソッドの場合はStructInfoに内包
+		if funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0 {
+			recvType := ""
+			switch t := funcDecl.Recv.List[0].Type.(type) {
+			case *ast.Ident:
+				recvType = t.Name
+			case *ast.StarExpr:
+				if ident, ok := t.X.(*ast.Ident); ok {
+					recvType = ident.Name
+				}
+			}
+			fi.Receiver = recvType
+			fi.BodyCalls = extractBodyCalls(funcDecl.Body)
+			if s, ok := structMap[recvType]; ok {
+				s.Methods = append(s.Methods, fi)
+			}
+		} else {
+			// 通常の関数
+			// --- 関数本体の呼び出し関数名抽出 ---
+			fi.BodyCalls = extractBodyCalls(funcDecl.Body)
+			functions = append(functions, fi)
+		}
+	}
+	return functions
+}
+
 // extractTypes はASTファイルから型宣言（構造体・インターフェース）を解析する
 func extractTypes(f *ast.File, fset *token.FileSet, file string, pkgName string) ([]StructInfo, []InterfaceInfo, map[string]*StructInfo) {
 	var structs []StructInfo
@@ -261,78 +329,13 @@ func analyzeFile(f *ast.File, fset *token.FileSet, file string, result *Result) 
 	result.Interfaces = append(result.Interfaces, interfaces...)
 
 	// 2nd pass: 関数・メソッド
-	for _, decl := range f.Decls {
-		funcDecl, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-		pos := fset.Position(funcDecl.Pos())
-		params := []FieldInfo{}
-		if funcDecl.Type.Params != nil {
-			for _, field := range funcDecl.Type.Params.List {
-				typeStr := exprToTypeString(field.Type)
-				for _, name := range field.Names {
-					params = append(params, FieldInfo{Name: name.Name, Type: typeStr})
-				}
-				if len(field.Names) == 0 {
-					params = append(params, FieldInfo{Name: "", Type: typeStr})
-				}
-			}
-		}
-		results := []FieldInfo{}
-		if funcDecl.Type.Results != nil {
-			for _, field := range funcDecl.Type.Results.List {
-				typeStr := exprToTypeString(field.Type)
-				for _, name := range field.Names {
-					results = append(results, FieldInfo{Name: name.Name, Type: typeStr})
-				}
-				if len(field.Names) == 0 {
-					results = append(results, FieldInfo{Name: "", Type: typeStr})
-				}
-			}
-		}
-		fi := FuncInfo{
-			Name:     funcDecl.Name.Name,
-			Package:  pkgName,
-			File:     file,
-			Position: pos,
-			Params:   params,
-			Results:  results,
-		}
-		// メソッドの場合はStructInfoに内包
-		if funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0 {
-			recvType := ""
-			switch t := funcDecl.Recv.List[0].Type.(type) {
-			case *ast.Ident:
-				recvType = t.Name
-			case *ast.StarExpr:
-				if ident, ok := t.X.(*ast.Ident); ok {
-					recvType = ident.Name
-				}
-			}
-			fi.Receiver = recvType
-			if s, ok := structMap[recvType]; ok {
-				s.Methods = append(s.Methods, fi)
-				// 構造体リストも更新
-				for i := range result.Structs {
-					if result.Structs[i].Name == recvType {
-						result.Structs[i] = *s
-					}
-				}
-			}
-		} else {
-			// 通常の関数
-			// --- 関数本体の呼び出し関数名抽出 ---
-			fi.BodyCalls = extractBodyCalls(funcDecl.Body)
-			result.Functions = append(result.Functions, fi)
-		}
-	}
-	// 構造体メソッドにもBodyCallsを追加
-	for _, s := range structMap {
-		for i, m := range s.Methods {
-			if m.Position.IsValid() {
-				s.Methods[i].BodyCalls = extractBodyCalls(findFuncDeclByName(f, m.Name))
-			}
+	functions := extractFunctions(f, fset, file, pkgName, structMap)
+	result.Functions = append(result.Functions, functions...)
+	
+	// 構造体リストの更新（メソッドが追加されたstructMapの内容を反映）
+	for i, structInfo := range result.Structs {
+		if s, exists := structMap[structInfo.Name]; exists {
+			result.Structs[i] = *s
 		}
 	}
 }
