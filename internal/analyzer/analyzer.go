@@ -200,14 +200,14 @@ func (ga *GoAnalyzer) extractDependencies(result *Result, targetDir string) []De
 
 	// 新しいstrategyベース依存関係抽出を使用
 	strategyExtractor := extraction.DefaultStrategyBasedExtractor(targetDir)
-	
+
 	// 解析済みファイルから依存関係を抽出
 	extractionDeps, err := strategyExtractor.ExtractFromFiles(ga.filesPath)
 	if err != nil {
 		logger.Error("strategy依存関係抽出エラー", "error", err)
 		return allDependencies
 	}
-	
+
 	// extraction.DependencyInfo を analyzer.DependencyInfo に変換
 	for _, dep := range extractionDeps {
 		allDependencies = append(allDependencies, DependencyInfo{
@@ -220,8 +220,6 @@ func (ga *GoAnalyzer) extractDependencies(result *Result, targetDir string) []De
 	logger.Info("依存関係解析完了", "total_dependencies", len(allDependencies))
 	return allDependencies
 }
-
-
 
 // extractImports はASTファイルからimport文を解析してImportInfoのスライスを返します。
 // importパスとエイリアス情報を抽出し、エイリアスが指定されていない場合は
