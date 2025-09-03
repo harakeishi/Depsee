@@ -93,10 +93,6 @@ func (d *Depsee) Analyze(config Config) error {
 	result := d.analyzer.ExportResult()
 	// ここまでリファクタ済み
 
-	fmt.Printf("解析結果: %+v\n\n", result)
-	// 結果表示
-	d.displayResults(result)
-
 	// 依存グラフ構築
 	var dependencyGraph *graph.DependencyGraph
 	if config.IncludePackageDeps {
@@ -156,41 +152,6 @@ func parseTargetPackages(targetPackages string) []string {
 	}
 
 	return result
-}
-
-// displayResults は解析結果を表示
-func (d *Depsee) displayResults(result *analyzer.Result) {
-	fmt.Println("[info] 構造体一覧:")
-	for _, s := range result.Structs {
-		fmt.Printf("  - %s (package: %s, file: %s)\n", s.Name, s.Package, s.File)
-		for _, m := range s.Methods {
-			fmt.Printf("      * メソッド: %s\n", m.Name)
-		}
-	}
-
-	fmt.Println("[info] インターフェース一覧:")
-	for _, i := range result.Interfaces {
-		fmt.Printf("  - %s (package: %s, file: %s)\n", i.Name, i.Package, i.File)
-	}
-
-	fmt.Println("[info] 関数一覧:")
-	for _, f := range result.Functions {
-		fmt.Printf("  - %s (package: %s, file: %s)\n", f.Name, f.Package, f.File)
-	}
-
-	if len(result.Packages) > 0 {
-		fmt.Println("[info] パッケージ一覧:")
-		for _, p := range result.Packages {
-			fmt.Printf("  - %s (file: %s)\n", p.Name, p.File)
-			for _, imp := range p.Imports {
-				alias := ""
-				if imp.Alias != "" {
-					alias = " as " + imp.Alias
-				}
-				fmt.Printf("      * import: %s%s\n", imp.Path, alias)
-			}
-		}
-	}
 }
 
 // displayGraph は依存グラフを表示
